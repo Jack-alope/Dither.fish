@@ -1,0 +1,17 @@
+{
+  "name": "Dither.fish",
+  "short_name": "Dither",
+  "description": "Gear locker and trip packing for anglers",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2d6a4f",
+  "background_color": "#f5f4f0",
+  "icons": [
+    {
+      "src": "/img/dither_fish.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    }
+  ]
+}

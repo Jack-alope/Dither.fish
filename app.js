@@ -978,3 +978,8 @@ function formatDateRange(start, end) {
   if (start && end) return `${fmt(start)} – ${fmt(end)}`;
   return fmt(start) || fmt(end);
 }
+
+// ── Service worker ────────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
