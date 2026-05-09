@@ -699,7 +699,7 @@ function renderPicker() {
     return `
       <li class="picker-item">
         <div class="picker-item-name">${esc(g.name)}</div>
-        <div class="picker-item-meta">${[g.category, g.weight != null ? `${g.weight}g` : null].filter(Boolean).join(' · ') || ''}</div>
+        <div class="picker-item-meta">${[g.brand, g.category, g.weight != null ? `${g.weight}g` : null].filter(Boolean).join(' · ') || ''}</div>
         <button class="picker-item-add ${already ? 'in-pack' : ''}"
                 data-add="${g.id}" ${already ? 'disabled' : ''}>
           ${already ? 'Added' : '+ Add'}
