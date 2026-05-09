@@ -3,10 +3,16 @@ const mongoose = require('mongoose');
 const packItemSchema = new mongoose.Schema({
   gearId: { type: mongoose.Schema.Types.ObjectId, ref: 'Gear', required: true },
   qty:    { type: Number, default: 1 },
+  cubeId: { type: String, default: null },
 }, { _id: false });
+
+const cubeSchema = new mongoose.Schema({
+  name: { type: String, default: 'Cube', trim: true },
+});
 
 const packSchema = new mongoose.Schema({
   name:  { type: String, default: 'Pack', trim: true },
+  cubes: { type: [cubeSchema], default: [] },
   items: { type: [packItemSchema], default: [] },
 });
 
