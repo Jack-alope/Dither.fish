@@ -159,6 +159,23 @@ function logout() {
 }
 document.getElementById('btn-logout').addEventListener('click', logout);
 
+// ── Notes popup ──────────────────────────────────────────────────────────────
+const notePopup     = document.getElementById('note-popup');
+const notePopupText = document.getElementById('note-popup-text');
+document.getElementById('note-popup-close').addEventListener('click', () => notePopup.classList.add('hidden'));
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.note-icon-btn');
+  if (btn) {
+    notePopupText.textContent = btn.dataset.note;
+    notePopup.classList.remove('hidden');
+    const r = btn.getBoundingClientRect();
+    notePopup.style.top  = `${r.bottom + window.scrollY + 6}px`;
+    notePopup.style.left = `${Math.min(r.left + window.scrollX, window.innerWidth - 260)}px`;
+    return;
+  }
+  if (!notePopup.contains(e.target)) notePopup.classList.add('hidden');
+});
+
 // ── Navigation ───────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -276,7 +293,7 @@ function renderGear() {
               <td>${esc(g.brand) || '—'}</td>
               <td>${g.weight != null && g.weight !== '' ? g.weight : '—'}</td>
               <td>${g.qty ?? 1}</td>
-              <td><span class="note-text" title="${esc(g.notes || '')}">${esc(g.notes || '') || '—'}</span></td>
+              <td>${g.notes ? `<button class="note-icon-btn" data-note="${esc(g.notes)}" title="View notes">ℹ</button>` : '—'}</td>
               <td class="col-actions">
                 <button data-edit="${g.id}">Edit</button>
                 <button data-delete="${g.id}" class="del">Delete</button>
@@ -504,8 +521,9 @@ function renderPackSection(trip) {
     const g = gear.find(g => g.id === p.gearId);
     if (g?.weight) totalWeight += g.weight * p.qty;
   });
+  const checkedCount = items.filter(p => p.checked).length;
   const statsText = items.length
-    ? `${items.length} item type${items.length !== 1 ? 's' : ''} · ${formatWeight(totalWeight)} total`
+    ? `${checkedCount}/${items.length} packed · ${formatWeight(totalWeight)} total`
     : '';
 
   const cubes    = pack.cubes || [];
@@ -516,7 +534,8 @@ function renderPackSection(trip) {
     if (!g) return '';
     const lineWeight = g.weight != null ? formatWeight(g.weight * p.qty) : null;
     return `
-      <li class="pack-item">
+      <li class="pack-item${p.checked ? ' pack-item-checked' : ''}">
+        <input type="checkbox" class="pack-check" data-check="${g.id}" ${p.checked ? 'checked' : ''} />
         <div class="pack-item-info">
           <div class="pack-item-name">${esc(g.name)}</div>
           <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
@@ -541,6 +560,7 @@ function renderPackSection(trip) {
     <div class="pack-name-row">
       <span class="pack-name-label">${esc(pack.name || `Pack ${currentPackIdx + 1}`)}</span>
       <button class="btn-link" data-rename-pack>Rename</button>
+      ${items.length ? `<button class="btn-link" data-reset-checklist>Reset</button>` : ''}
     </div>
     ${statsText ? `<p class="pack-stats">${statsText}</p>` : ''}
 
@@ -669,19 +689,35 @@ packBodyArea.addEventListener('click', e => {
     pack.cubes.push({ name: name.trim() || `Cube ${pack.cubes.length + 1}` });
     savePack(trip);
   }
+  const isReset = e.target.closest('[data-reset-checklist]');
+  if (isReset) {
+    pack.items.forEach(p => { p.checked = false; });
+    savePack(trip);
+  }
 });
 
 packBodyArea.addEventListener('change', e => {
-  const assignEl = e.target.closest('[data-cube-assign]');
-  if (!assignEl) return;
   const trip = trips.find(t => t.id === currentTripId);
   if (!trip) return;
   const pack = trip.packs[currentPackIdx];
   if (!pack) return;
-  const p = pack.items.find(p => p.gearId === assignEl.dataset.cubeAssign);
-  if (p) {
-    p.cubeId = assignEl.value || null;
-    savePack(trip);
+
+  const assignEl = e.target.closest('[data-cube-assign]');
+  if (assignEl) {
+    const p = pack.items.find(p => p.gearId === assignEl.dataset.cubeAssign);
+    if (p) {
+      p.cubeId = assignEl.value || null;
+      savePack(trip);
+    }
+  }
+
+  const checkEl = e.target.closest('[data-check]');
+  if (checkEl) {
+    const p = pack.items.find(p => p.gearId === checkEl.dataset.check);
+    if (p) {
+      p.checked = checkEl.checked;
+      savePack(trip);
+    }
   }
 });
 
@@ -842,7 +878,7 @@ function renderCatalog() {
               <td><strong>${esc(c.name)}</strong></td>
               <td>${esc(c.brand) || '—'}</td>
               <td>${c.weight != null ? c.weight : '—'}</td>
-              <td><span class="note-text" title="${esc(c.notes || '')}">${esc(c.notes || '') || '—'}</span></td>
+              <td>${c.notes ? `<button class="note-icon-btn" data-note="${esc(c.notes)}" title="View notes">ℹ</button>` : '—'}</td>
               <td class="col-actions">
                 <button class="btn-add-from-catalog" data-catalog-id="${c.id}">+ My Gear</button>
                 ${currentIsAdmin ? `<button data-catalog-edit="${c._id ?? c.id}">Edit</button><button data-catalog-delete="${c._id ?? c.id}" class="del">Delete</button>` : ''}

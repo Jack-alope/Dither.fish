@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
 const packItemSchema = new mongoose.Schema({
-  gearId: { type: mongoose.Schema.Types.ObjectId, ref: 'Gear', required: true },
-  qty:    { type: Number, default: 1 },
-  cubeId: { type: String, default: null },
+  gearId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Gear', required: true },
+  qty:     { type: Number, default: 1 },
+  cubeId:  { type: String, default: null },
+  checked: { type: Boolean, default: false },
 }, { _id: false });
 
 const cubeSchema = new mongoose.Schema({
