@@ -5,6 +5,11 @@ const packItemSchema = new mongoose.Schema({
   qty:    { type: Number, default: 1 },
 }, { _id: false });
 
+const packSchema = new mongoose.Schema({
+  name:  { type: String, default: 'Pack', trim: true },
+  items: { type: [packItemSchema], default: [] },
+});
+
 const tripSchema = new mongoose.Schema({
   userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   name:        { type: String, required: true, trim: true },
@@ -13,6 +18,7 @@ const tripSchema = new mongoose.Schema({
   endDate:     { type: String, default: '' },
   notes:       { type: String, default: '' },
   pack:        { type: [packItemSchema], default: [] },
+  packs:       { type: [packSchema], default: [] },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Trip', tripSchema);

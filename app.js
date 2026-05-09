@@ -7,8 +7,9 @@ let currentIsAdmin  = localStorage.getItem('lp_isAdmin') === 'true';
 let gear    = [];
 let trips   = [];
 let catalog = [];
-let currentView   = 'gear';
-let currentTripId = null;
+let currentView    = 'gear';
+let currentTripId  = null;
+let currentPackIdx = 0;
 
 // ── API helper ───────────────────────────────────────────────────────────────
 
@@ -66,11 +67,17 @@ async function loadAll() {
 // Normalise Mongo _id -> id for the frontend
 function normalizeGear(g)  { return { ...g, id: g._id ?? g.id }; }
 function normalizeTrip(t)  {
-  return {
-    ...t,
-    id: t._id ?? t.id,
-    pack: (t.pack || []).map(p => ({ ...p, gearId: p.gearId?._id ?? p.gearId })),
-  };
+  const base = { ...t, id: t._id ?? t.id };
+  if (!base.packs || base.packs.length === 0) {
+    const legacy = (base.pack || []).map(p => ({ ...p, gearId: p.gearId?._id ?? p.gearId }));
+    base.packs = [{ name: 'Pack 1', items: legacy }];
+  } else {
+    base.packs = base.packs.map(pk => ({
+      ...pk,
+      items: (pk.items || []).map(p => ({ ...p, gearId: p.gearId?._id ?? p.gearId })),
+    }));
+  }
+  return base;
 }
 
 if (authToken) { showApp(); } else { showAuth(); }
@@ -192,14 +199,21 @@ const gearContainer = document.getElementById('gear-container');
 const gearEmpty     = document.getElementById('gear-empty');
 const gearSearch    = document.getElementById('gear-search');
 const catFilter     = document.getElementById('gear-category-filter');
+const brandFilter   = document.getElementById('gear-brand-filter');
 const catDatalist   = document.getElementById('category-list');
+const brandDatalist = document.getElementById('brand-list');
 
 document.getElementById('btn-add-item').addEventListener('click', () => openItemModal());
 gearSearch.addEventListener('input', renderGear);
 catFilter.addEventListener('change', renderGear);
+brandFilter.addEventListener('change', renderGear);
 
 function categories() {
   return [...new Set(gear.map(g => g.category).filter(Boolean))].sort();
+}
+
+function brands() {
+  return [...new Set(gear.map(g => g.brand).filter(Boolean))].sort();
 }
 
 function refreshCategoryUI() {
@@ -208,15 +222,23 @@ function refreshCategoryUI() {
   const current = catFilter.value;
   catFilter.innerHTML = `<option value="">All categories</option>` +
     cats.map(c => `<option value="${esc(c)}" ${c === current ? 'selected' : ''}>${esc(c)}</option>`).join('');
+
+  const bs = brands();
+  brandDatalist.innerHTML = bs.map(b => `<option value="${esc(b)}">`).join('');
+  const curBrand = brandFilter.value;
+  brandFilter.innerHTML = `<option value="">All brands</option>` +
+    bs.map(b => `<option value="${esc(b)}" ${b === curBrand ? 'selected' : ''}>${esc(b)}</option>`).join('');
 }
 
 function renderGear() {
   refreshCategoryUI();
-  const q   = gearSearch.value.toLowerCase();
-  const cat = catFilter.value;
+  const q      = gearSearch.value.toLowerCase();
+  const cat    = catFilter.value;
+  const brand  = brandFilter.value;
   const filtered = gear.filter(g =>
-    (!q   || g.name.toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
-    (!cat || g.category === cat)
+    (!q     || g.name.toLowerCase().includes(q) || (g.brand || '').toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
+    (!cat   || g.category === cat) &&
+    (!brand || g.brand === brand)
   );
   gearEmpty.style.display = filtered.length ? 'none' : 'block';
   gearContainer.style.display = filtered.length ? '' : 'none';
@@ -243,13 +265,14 @@ function renderGear() {
       <table class="gear-table">
         <thead>
           <tr>
-            <th>Name</th><th>Weight (g)</th><th>Qty</th><th>Notes</th><th></th>
+            <th>Name</th><th>Brand</th><th>Weight (g)</th><th>Qty</th><th>Notes</th><th></th>
           </tr>
         </thead>
         <tbody>
           ${items.map(g => `
             <tr>
               <td><strong>${esc(g.name)}</strong></td>
+              <td>${esc(g.brand) || '—'}</td>
               <td>${g.weight != null && g.weight !== '' ? g.weight : '—'}</td>
               <td>${g.qty ?? 1}</td>
               <td><span class="note-text" title="${esc(g.notes || '')}">${esc(g.notes || '') || '—'}</span></td>
@@ -278,6 +301,7 @@ function openItemModal(item = null) {
   document.getElementById('modal-item-title').textContent = item ? 'Edit Item' : 'Add Item';
   if (item) {
     form.name.value     = item.name;
+    form.brand.value    = item.brand || '';
     form.category.value = item.category || '';
     form.weight.value   = item.weight ?? '';
     form.qty.value      = item.qty ?? 1;
@@ -295,6 +319,7 @@ document.getElementById('form-item').addEventListener('submit', async e => {
   const id = fd.get('id');
   const payload = {
     name:     fd.get('name').trim(),
+    brand:    fd.get('brand').trim(),
     category: fd.get('category').trim(),
     weight:   fd.get('weight') !== '' ? parseFloat(fd.get('weight')) : null,
     qty:      parseInt(fd.get('qty')) || 1,
@@ -320,7 +345,9 @@ async function deleteItem(id) {
   try {
     await api(`/gear/${id}`, { method: 'DELETE' });
     gear = gear.filter(g => g.id !== id);
-    trips.forEach(t => { t.pack = (t.pack || []).filter(p => p.gearId !== id); });
+    trips.forEach(t => {
+      (t.packs || []).forEach(pk => { pk.items = (pk.items || []).filter(p => p.gearId !== id); });
+    });
     renderGear();
     if (currentTripId) renderTripDetail();
   } catch (err) { alert(err.message); }
@@ -355,17 +382,10 @@ function showTripList() {
   currentTripId = null;
 }
 
-function showTripDetail(id) {
-  currentTripId = id;
-  tripListPanel.classList.add('hidden');
-  tripDetailPanel.classList.remove('hidden');
-  renderTripDetail();
-}
-
 function renderTripList() {
   tripsEmpty.style.display = trips.length ? 'none' : 'block';
   tripListEl.innerHTML = trips.map(t => {
-    const itemCount = (t.pack || []).length;
+    const itemCount = (t.packs || []).reduce((sum, pk) => sum + (pk.items || []).length, 0);
     const meta = [t.destination, formatDateRange(t.startDate, t.endDate)].filter(Boolean).join(' · ');
     return `
       <li>
@@ -417,7 +437,7 @@ document.getElementById('form-trip').addEventListener('submit', async e => {
     let updated;
     if (id) {
       const existing = trips.find(t => t.id === id);
-      updated = normalizeTrip(await api(`/trips/${id}`, { method: 'PUT', body: { ...payload, pack: existing?.pack || [] } }));
+      updated = normalizeTrip(await api(`/trips/${id}`, { method: 'PUT', body: { ...payload, packs: existing?.packs || [] } }));
       const idx = trips.findIndex(t => t.id === id);
       if (idx >= 0) trips[idx] = updated;
     } else {
@@ -433,13 +453,20 @@ document.getElementById('form-trip').addEventListener('submit', async e => {
 
 // ── Trip detail / pack ───────────────────────────────────────────────────────
 
-const packList    = document.getElementById('pack-list');
-const packEmpty   = document.getElementById('pack-empty');
-const packStats   = document.getElementById('pack-stats');
-const pickerList  = document.getElementById('picker-list');
+const pickerList   = document.getElementById('picker-list');
 const pickerSearch = document.getElementById('picker-search');
+const packTabsArea = document.getElementById('pack-tabs-area');
+const packBodyArea = document.getElementById('pack-body-area');
 
 pickerSearch.addEventListener('input', renderPicker);
+
+function showTripDetail(id) {
+  currentTripId  = id;
+  currentPackIdx = 0;
+  tripListPanel.classList.add('hidden');
+  tripDetailPanel.classList.remove('hidden');
+  renderTripDetail();
+}
 
 function renderTripDetail() {
   const trip = trips.find(t => t.id === currentTripId);
@@ -447,41 +474,66 @@ function renderTripDetail() {
   document.getElementById('trip-detail-name').textContent = trip.name;
   const meta = [trip.destination, formatDateRange(trip.startDate, trip.endDate)].filter(Boolean).join(' · ');
   document.getElementById('trip-detail-meta').textContent = meta;
-  renderPackList(trip);
+  const packs = trip.packs || [];
+  if (currentPackIdx >= packs.length) currentPackIdx = Math.max(0, packs.length - 1);
+  renderPackSection(trip);
   renderPicker();
 }
 
-function renderPackList(trip) {
-  const pack = trip.pack || [];
-  packEmpty.style.display = pack.length ? 'none' : 'block';
+function renderPackSection(trip) {
+  const packs = trip.packs || [];
 
+  packTabsArea.innerHTML = `
+    <div class="pack-tabs">
+      ${packs.map((pk, i) => `
+        <button class="pack-tab${i === currentPackIdx ? ' active' : ''}" data-tab="${i}">
+          ${esc(pk.name || `Pack ${i + 1}`)}
+          ${packs.length > 1 ? `<span class="pack-tab-del" data-del-pack="${i}" title="Remove pack">×</span>` : ''}
+        </button>
+      `).join('')}
+      <button class="pack-tab pack-tab-new" data-new-pack>+ Pack</button>
+    </div>`;
+
+  const pack = packs[currentPackIdx];
+  if (!pack) { packBodyArea.innerHTML = ''; return; }
+
+  const items = pack.items || [];
   let totalWeight = 0;
-  pack.forEach(p => {
+  items.forEach(p => {
     const g = gear.find(g => g.id === p.gearId);
     if (g?.weight) totalWeight += g.weight * p.qty;
   });
-  packStats.textContent = pack.length
-    ? `${pack.length} item type${pack.length !== 1 ? 's' : ''} · ${formatWeight(totalWeight)} total`
+  const statsText = items.length
+    ? `${items.length} item type${items.length !== 1 ? 's' : ''} · ${formatWeight(totalWeight)} total`
     : '';
 
-  packList.innerHTML = pack.map(p => {
-    const g = gear.find(g => g.id === p.gearId);
-    if (!g) return '';
-    const lineWeight = g.weight != null ? formatWeight(g.weight * p.qty) : null;
-    return `
-      <li class="pack-item" data-pack-id="${g.id}">
-        <div class="pack-item-info">
-          <div class="pack-item-name">${esc(g.name)}</div>
-          <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
-        </div>
-        <div class="pack-item-qty">
-          <button data-qty-dec="${g.id}">−</button>
-          <span>${p.qty}</span>
-          <button data-qty-inc="${g.id}">+</button>
-        </div>
-        <button class="pack-item-remove" data-remove="${g.id}" title="Remove">✕</button>
-      </li>`;
-  }).join('');
+  packBodyArea.innerHTML = `
+    <div class="pack-name-row">
+      <span class="pack-name-label">${esc(pack.name || `Pack ${currentPackIdx + 1}`)}</span>
+      <button class="btn-link" data-rename-pack>Rename</button>
+    </div>
+    ${statsText ? `<p class="pack-stats">${statsText}</p>` : ''}
+    <ul class="pack-list">
+      ${items.map(p => {
+        const g = gear.find(g => g.id === p.gearId);
+        if (!g) return '';
+        const lineWeight = g.weight != null ? formatWeight(g.weight * p.qty) : null;
+        return `
+          <li class="pack-item">
+            <div class="pack-item-info">
+              <div class="pack-item-name">${esc(g.name)}</div>
+              <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
+            </div>
+            <div class="pack-item-qty">
+              <button data-qty-dec="${g.id}">−</button>
+              <span>${p.qty}</span>
+              <button data-qty-inc="${g.id}">+</button>
+            </div>
+            <button class="pack-item-remove" data-remove="${g.id}" title="Remove">✕</button>
+          </li>`;
+      }).join('')}
+    </ul>
+    ${!items.length ? '<p class="empty-msg">No items in this pack yet.</p>' : ''}`;
 }
 
 async function savePack(trip) {
@@ -489,33 +541,74 @@ async function savePack(trip) {
     const updated = normalizeTrip(await api(`/trips/${trip.id}`, { method: 'PUT', body: trip }));
     const idx = trips.findIndex(t => t.id === trip.id);
     if (idx >= 0) trips[idx] = updated;
-    renderPackList(updated);
+    if (currentPackIdx >= updated.packs.length) currentPackIdx = Math.max(0, updated.packs.length - 1);
+    renderPackSection(updated);
     renderPicker();
     renderTripList();
   } catch (err) { alert(err.message); }
 }
 
-packList.addEventListener('click', e => {
+packTabsArea.addEventListener('click', e => {
   const trip = trips.find(t => t.id === currentTripId);
   if (!trip) return;
-  const incId = e.target.closest('[data-qty-inc]')?.dataset.qtyInc;
-  const decId = e.target.closest('[data-qty-dec]')?.dataset.qtyDec;
-  const remId = e.target.closest('[data-remove]')?.dataset.remove;
+
+  const tabIdx = e.target.closest('[data-tab]')?.dataset.tab;
+  const delIdx = e.target.closest('[data-del-pack]')?.dataset.delPack;
+  const isNew  = e.target.closest('[data-new-pack]');
+
+  if (tabIdx !== undefined && !e.target.closest('[data-del-pack]')) {
+    currentPackIdx = parseInt(tabIdx);
+    renderPackSection(trip);
+    renderPicker();
+    return;
+  }
+  if (delIdx !== undefined) {
+    const i = parseInt(delIdx);
+    const pack = trip.packs[i];
+    if (pack.items.length && !confirm(`Remove "${pack.name || `Pack ${i + 1}`}" and its ${pack.items.length} item(s)?`)) return;
+    trip.packs.splice(i, 1);
+    if (currentPackIdx >= trip.packs.length) currentPackIdx = trip.packs.length - 1;
+    savePack(trip);
+    return;
+  }
+  if (isNew) {
+    trip.packs.push({ name: `Pack ${trip.packs.length + 1}`, items: [] });
+    currentPackIdx = trip.packs.length - 1;
+    savePack(trip);
+  }
+});
+
+packBodyArea.addEventListener('click', e => {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const pack = trip.packs[currentPackIdx];
+  if (!pack) return;
+
+  const incId    = e.target.closest('[data-qty-inc]')?.dataset.qtyInc;
+  const decId    = e.target.closest('[data-qty-dec]')?.dataset.qtyDec;
+  const remId    = e.target.closest('[data-remove]')?.dataset.remove;
+  const isRename = e.target.closest('[data-rename-pack]');
 
   if (incId) {
-    const p = trip.pack.find(p => p.gearId === incId);
+    const p = pack.items.find(p => p.gearId === incId);
     if (p) { p.qty++; savePack(trip); }
   }
   if (decId) {
-    const idx = trip.pack.findIndex(p => p.gearId === decId);
+    const idx = pack.items.findIndex(p => p.gearId === decId);
     if (idx >= 0) {
-      trip.pack[idx].qty--;
-      if (trip.pack[idx].qty <= 0) trip.pack.splice(idx, 1);
+      pack.items[idx].qty--;
+      if (pack.items[idx].qty <= 0) pack.items.splice(idx, 1);
       savePack(trip);
     }
   }
   if (remId) {
-    trip.pack = trip.pack.filter(p => p.gearId !== remId);
+    pack.items = pack.items.filter(p => p.gearId !== remId);
+    savePack(trip);
+  }
+  if (isRename) {
+    const newName = prompt('Pack name:', pack.name || `Pack ${currentPackIdx + 1}`);
+    if (newName === null) return;
+    pack.name = newName.trim() || `Pack ${currentPackIdx + 1}`;
     savePack(trip);
   }
 });
@@ -527,7 +620,8 @@ function renderPicker() {
   const filtered = gear.filter(g =>
     !q || g.name.toLowerCase().includes(q) || (g.category || '').toLowerCase().includes(q)
   );
-  const inPack = new Set((trip.pack || []).map(p => p.gearId));
+  const pack = trip.packs[currentPackIdx];
+  const inPack = new Set((pack?.items || []).map(p => p.gearId));
   pickerList.innerHTML = filtered.map(g => {
     const already = inPack.has(g.id);
     return `
@@ -549,10 +643,11 @@ pickerList.addEventListener('click', e => {
   if (!addId) return;
   const trip = trips.find(t => t.id === currentTripId);
   if (!trip) return;
-  if (!(trip.pack || []).find(p => p.gearId === addId)) {
+  const pack = trip.packs[currentPackIdx];
+  if (!pack) return;
+  if (!pack.items.find(p => p.gearId === addId)) {
     const g = gear.find(g => g.id === addId);
-    trip.pack = trip.pack || [];
-    trip.pack.push({ gearId: addId, qty: g?.qty ?? 1 });
+    pack.items.push({ gearId: addId, qty: g?.qty ?? 1 });
     savePack(trip);
   }
 });
@@ -702,7 +797,7 @@ catalogContainer.addEventListener('click', async e => {
     try {
       const created = normalizeGear(await api('/gear', {
         method: 'POST',
-        body: { name: item.name, category: item.category, weight: item.weight, qty: 1, notes: item.notes || '' },
+        body: { name: item.name, brand: item.brand || '', category: item.category, weight: item.weight, qty: 1, notes: item.notes || '' },
       }));
       gear.push(created);
       e.target.textContent = 'Added!';
@@ -763,7 +858,7 @@ async function loadPendingItems() {
             <td><span class="note-text">${esc(item.notes) || '—'}</span></td>
             <td>${esc(item.submittedBy?.username || '—')}</td>
             <td class="col-actions">
-              <button data-pending-edit="${item._id}" data-item='${JSON.stringify({_id:item._id,name:item.name,brand:item.brand,category:item.category,weight:item.weight,notes:item.notes})}'>Edit</button>
+              <button data-pending-edit="${item._id}" data-item="${esc(JSON.stringify({_id:item._id,name:item.name,brand:item.brand,category:item.category,weight:item.weight,notes:item.notes}))}">Edit</button>
               <button data-approve="${item._id}">Approve</button>
               <button data-reject="${item._id}" class="del">Reject</button>
             </td>

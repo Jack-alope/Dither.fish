@@ -11,6 +11,8 @@ function makeToken(user) {
 }
 
 router.post('/register', async (req, res) => {
+  if (process.env.REGISTRATION_OPEN !== 'true')
+    return res.status(403).json({ error: 'Registration is closed' });
   try {
     const { username, password } = req.body;
     if (!username?.trim() || !password) return res.status(400).json({ error: 'Username and password required' });

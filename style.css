@@ -447,6 +447,63 @@ main {
   .pack-layout { grid-template-columns: 1fr; }
 }
 
+.pack-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+.pack-tab {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pack-tab.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.pack-tab-new {
+  background: transparent;
+  color: var(--text-muted);
+  border-style: dashed;
+}
+.pack-tab-del {
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.6;
+  margin-left: 0.1rem;
+}
+.pack-tab-del:hover { opacity: 1; }
+.pack-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+.pack-name-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.btn-link:hover { color: var(--text); }
+
 .pack-column h3,
 .gear-picker-column h3 {
   font-size: 0.95rem;

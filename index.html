@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LibrePack</title>
+  <title>Dither.fish</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -11,7 +11,7 @@
   <!-- ───── AUTH SCREEN ───── -->
   <div id="auth-screen">
     <div class="auth-card">
-      <div class="auth-logo">LibrePack</div>
+      <div class="auth-logo">Dither.fish</div>
       <div class="auth-tabs">
         <button class="auth-tab active" data-tab="login">Sign in</button>
         <button class="auth-tab" data-tab="register">Create account</button>
@@ -38,7 +38,7 @@
   <div id="app" class="hidden">
     <header>
       <div class="header-inner">
-        <span class="logo">LibrePack</span>
+        <span class="logo">Dither.fish</span>
         <nav>
           <button class="nav-btn active" data-view="gear">Gear Locker</button>
           <button class="nav-btn" data-view="trips">Trips</button>
@@ -63,6 +63,9 @@
           <input type="text" id="gear-search" placeholder="Search gear…" />
           <select id="gear-category-filter">
             <option value="">All categories</option>
+          </select>
+          <select id="gear-brand-filter">
+            <option value="">All brands</option>
           </select>
         </div>
 
@@ -94,10 +97,8 @@
 
           <div class="pack-layout">
             <div class="pack-column">
-              <h3>Pack List</h3>
-              <p class="pack-stats" id="pack-stats"></p>
-              <ul class="pack-list" id="pack-list"></ul>
-              <p class="empty-msg" id="pack-empty">No items in this pack yet.</p>
+              <div id="pack-tabs-area"></div>
+              <div id="pack-body-area"></div>
             </div>
             <div class="gear-picker-column">
               <h3>Add from Gear Locker</h3>
@@ -143,6 +144,8 @@
       <h3 id="modal-item-title">Add Item</h3>
       <form id="form-item" autocomplete="off">
         <label>Name <input type="text" name="name" required /></label>
+        <label>Brand <input type="text" name="brand" list="brand-list" /></label>
+        <datalist id="brand-list"></datalist>
         <label>Category <input type="text" name="category" list="category-list" /></label>
         <datalist id="category-list"></datalist>
         <label>Weight (g) <input type="number" name="weight" min="0" step="0.1" /></label>

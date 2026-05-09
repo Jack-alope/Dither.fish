@@ -15,7 +15,7 @@ router.post('/', async (req, res) => {
   try {
     const { name, destination, startDate, endDate, notes } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
-    const trip = await Trip.create({ userId: req.user.id, name: name.trim(), destination, startDate, endDate, notes, pack: [] });
+    const trip = await Trip.create({ userId: req.user.id, name: name.trim(), destination, startDate, endDate, notes, pack: [], packs: [{ name: 'Pack 1', items: [] }] });
     res.status(201).json(trip);
   } catch { res.status(500).json({ error: 'Server error' }); }
 });

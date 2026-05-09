@@ -13,9 +13,9 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, category, weight, qty, notes } = req.body;
+    const { name, brand, category, weight, qty, notes } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
-    const item = await Gear.create({ userId: req.user.id, name: name.trim(), category, weight, qty, notes });
+    const item = await Gear.create({ userId: req.user.id, name: name.trim(), brand, category, weight, qty, notes });
     res.status(201).json(item);
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
