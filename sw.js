@@ -1,5 +1,14 @@
-const CACHE = 'dither-v1';
-const STATIC = ['/', '/app.js', '/style.css', '/img/dither_fish.png', '/img/dither_fish.ico'];
+const CACHE = 'dither-v2';
+const STATIC = [
+  '/',
+  '/app.js',
+  '/style.css',
+  '/manifest.json',
+  '/img/dither_fish.png',
+  '/img/dither_fish.ico',
+  '/img/dither_fish_192.png',
+  '/img/dither_fish_512.png',
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
