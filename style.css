@@ -361,14 +361,18 @@ main {
 .note-icon-btn:hover { color: var(--accent); }
 
 .note-popup {
-  position: absolute;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 500;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-  padding: 0.75rem 1rem;
-  max-width: 240px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  padding: 1rem 1.25rem 1rem 1rem;
+  max-width: min(320px, 90vw);
+  width: max-content;
   font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text);
@@ -376,15 +380,15 @@ main {
 .note-popup p { margin: 0; white-space: pre-wrap; }
 .note-popup-close {
   position: absolute;
-  top: 0.3rem;
+  top: 0.35rem;
   right: 0.4rem;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   line-height: 1;
-  padding: 0.15rem;
+  padding: 0.2rem;
 }
 .note-popup-close:hover { color: var(--text); }
 
@@ -775,6 +779,7 @@ main {
   /* Header */
   .header-inner { padding: 0 0.75rem; gap: 0.5rem; }
   .logo { font-size: 1rem; }
+  .logo-text { display: none; }
   .nav-btn { padding: 0.3rem 0.55rem; font-size: 0.82rem; }
   #header-username { display: none; }
 
@@ -786,19 +791,15 @@ main {
   .filter-bar input { min-width: 100%; }
   .filter-bar select { flex: 1; }
 
-  /* Gear locker table — hide Brand, Qty, Notes; keep Name + Weight + Actions */
+  /* Gear locker table — hide Brand + Qty; keep Name + Weight + Notes + Actions */
   #gear-container .gear-table th:nth-child(2),
   #gear-container .gear-table td:nth-child(2),
   #gear-container .gear-table th:nth-child(4),
-  #gear-container .gear-table td:nth-child(4),
-  #gear-container .gear-table th:nth-child(5),
-  #gear-container .gear-table td:nth-child(5) { display: none; }
+  #gear-container .gear-table td:nth-child(4) { display: none; }
 
-  /* Catalog table — hide Weight + Notes; keep Name + Brand + button */
+  /* Catalog table — hide Weight; keep Name + Brand + Notes + button */
   #catalog-container .gear-table th:nth-child(3),
-  #catalog-container .gear-table td:nth-child(3),
-  #catalog-container .gear-table th:nth-child(4),
-  #catalog-container .gear-table td:nth-child(4) { display: none; }
+  #catalog-container .gear-table td:nth-child(3) { display: none; }
 
   /* Note text — remove fixed max-width so it doesn't overflow */
 

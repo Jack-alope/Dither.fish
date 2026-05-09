@@ -168,9 +168,6 @@ document.addEventListener('click', e => {
   if (btn) {
     notePopupText.textContent = btn.dataset.note;
     notePopup.classList.remove('hidden');
-    const r = btn.getBoundingClientRect();
-    notePopup.style.top  = `${r.bottom + window.scrollY + 6}px`;
-    notePopup.style.left = `${Math.min(r.left + window.scrollX, window.innerWidth - 260)}px`;
     return;
   }
   if (!notePopup.contains(e.target)) notePopup.classList.add('hidden');
