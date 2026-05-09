@@ -46,6 +46,6 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../index.html')));
 app.listen(port, () => console.log(`Server running on http://localhost:${port}`));
 
 mongoose
-  .connect(process.env.MONGODB_URI, { tls: true, tlsAllowInvalidCertificates: true })
+  .connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err.message));
