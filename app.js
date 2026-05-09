@@ -74,6 +74,7 @@ function normalizeTrip(t)  {
   } else {
     base.packs = base.packs.map(pk => ({
       ...pk,
+      cubes: (pk.cubes || []).map(c => ({ ...c, id: String(c._id ?? c.id) })),
       items: (pk.items || []).map(p => ({ ...p, gearId: p.gearId?._id ?? p.gearId })),
     }));
   }
@@ -507,33 +508,64 @@ function renderPackSection(trip) {
     ? `${items.length} item type${items.length !== 1 ? 's' : ''} · ${formatWeight(totalWeight)} total`
     : '';
 
+  const cubes    = pack.cubes || [];
+  const hasCubes = cubes.length > 0;
+
+  function renderItem(p) {
+    const g = gear.find(g => g.id === p.gearId);
+    if (!g) return '';
+    const lineWeight = g.weight != null ? formatWeight(g.weight * p.qty) : null;
+    return `
+      <li class="pack-item">
+        <div class="pack-item-info">
+          <div class="pack-item-name">${esc(g.name)}</div>
+          <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
+        </div>
+        <div class="pack-item-qty">
+          <button data-qty-dec="${g.id}">−</button>
+          <span>${p.qty}</span>
+          <button data-qty-inc="${g.id}">+</button>
+        </div>
+        ${hasCubes ? `
+          <select class="cube-select" data-cube-assign="${g.id}">
+            <option value="">No cube</option>
+            ${cubes.map(c => `<option value="${c.id}" ${p.cubeId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
+          </select>` : ''}
+        <button class="pack-item-remove" data-remove="${g.id}" title="Remove">✕</button>
+      </li>`;
+  }
+
+  const ungrouped = items.filter(p => !p.cubeId || !cubes.find(c => c.id === p.cubeId));
+
   packBodyArea.innerHTML = `
     <div class="pack-name-row">
       <span class="pack-name-label">${esc(pack.name || `Pack ${currentPackIdx + 1}`)}</span>
       <button class="btn-link" data-rename-pack>Rename</button>
     </div>
     ${statsText ? `<p class="pack-stats">${statsText}</p>` : ''}
-    <ul class="pack-list">
-      ${items.map(p => {
-        const g = gear.find(g => g.id === p.gearId);
-        if (!g) return '';
-        const lineWeight = g.weight != null ? formatWeight(g.weight * p.qty) : null;
-        return `
-          <li class="pack-item">
-            <div class="pack-item-info">
-              <div class="pack-item-name">${esc(g.name)}</div>
-              <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
-            </div>
-            <div class="pack-item-qty">
-              <button data-qty-dec="${g.id}">−</button>
-              <span>${p.qty}</span>
-              <button data-qty-inc="${g.id}">+</button>
-            </div>
-            <button class="pack-item-remove" data-remove="${g.id}" title="Remove">✕</button>
-          </li>`;
-      }).join('')}
-    </ul>
-    ${!items.length ? '<p class="empty-msg">No items in this pack yet.</p>' : ''}`;
+
+    ${cubes.map(c => {
+      const cubeItems = items.filter(p => p.cubeId === c.id);
+      return `
+        <div class="cube-block">
+          <div class="cube-header">
+            <span class="cube-name">${esc(c.name)}</span>
+            <button class="btn-link" data-rename-cube="${c.id}">Rename</button>
+            <button class="cube-del" data-del-cube="${c.id}" title="Remove cube">×</button>
+          </div>
+          <ul class="pack-list">${cubeItems.map(renderItem).join('')}</ul>
+          ${!cubeItems.length ? '<p class="cube-empty">Empty — assign items using the dropdown on each item.</p>' : ''}
+        </div>`;
+    }).join('')}
+
+    ${ungrouped.length || !hasCubes ? `
+      <div class="cube-block cube-ungrouped">
+        ${hasCubes ? '<div class="cube-header"><span class="cube-name">Ungrouped</span></div>' : ''}
+        <ul class="pack-list">${ungrouped.map(renderItem).join('')}</ul>
+        ${!items.length ? '<p class="empty-msg">No items in this pack yet.</p>' : ''}
+      </div>` : ''}
+
+    <button class="btn-new-cube" data-new-cube>+ Add Cube</button>`;
 }
 
 async function savePack(trip) {
@@ -584,10 +616,13 @@ packBodyArea.addEventListener('click', e => {
   const pack = trip.packs[currentPackIdx];
   if (!pack) return;
 
-  const incId    = e.target.closest('[data-qty-inc]')?.dataset.qtyInc;
-  const decId    = e.target.closest('[data-qty-dec]')?.dataset.qtyDec;
-  const remId    = e.target.closest('[data-remove]')?.dataset.remove;
-  const isRename = e.target.closest('[data-rename-pack]');
+  const incId       = e.target.closest('[data-qty-inc]')?.dataset.qtyInc;
+  const decId       = e.target.closest('[data-qty-dec]')?.dataset.qtyDec;
+  const remId       = e.target.closest('[data-remove]')?.dataset.remove;
+  const isRenamePack = e.target.closest('[data-rename-pack]');
+  const renameCubeId = e.target.closest('[data-rename-cube]')?.dataset.renameCube;
+  const delCubeId    = e.target.closest('[data-del-cube]')?.dataset.delCube;
+  const isNewCube    = e.target.closest('[data-new-cube]');
 
   if (incId) {
     const p = pack.items.find(p => p.gearId === incId);
@@ -605,10 +640,47 @@ packBodyArea.addEventListener('click', e => {
     pack.items = pack.items.filter(p => p.gearId !== remId);
     savePack(trip);
   }
-  if (isRename) {
+  if (isRenamePack) {
     const newName = prompt('Pack name:', pack.name || `Pack ${currentPackIdx + 1}`);
     if (newName === null) return;
     pack.name = newName.trim() || `Pack ${currentPackIdx + 1}`;
+    savePack(trip);
+  }
+  if (renameCubeId) {
+    const cube = pack.cubes.find(c => c.id === renameCubeId);
+    if (!cube) return;
+    const newName = prompt('Cube name:', cube.name);
+    if (newName === null) return;
+    cube.name = newName.trim() || cube.name;
+    savePack(trip);
+  }
+  if (delCubeId) {
+    const cube = pack.cubes.find(c => c.id === delCubeId);
+    const cubeItems = pack.items.filter(p => p.cubeId === delCubeId);
+    if (cubeItems.length && !confirm(`Remove cube "${cube?.name}"? Its ${cubeItems.length} item(s) will become ungrouped.`)) return;
+    pack.cubes = pack.cubes.filter(c => c.id !== delCubeId);
+    pack.items.forEach(p => { if (p.cubeId === delCubeId) p.cubeId = null; });
+    savePack(trip);
+  }
+  if (isNewCube) {
+    const name = prompt('Cube name:', `Cube ${(pack.cubes || []).length + 1}`);
+    if (name === null) return;
+    pack.cubes = pack.cubes || [];
+    pack.cubes.push({ name: name.trim() || `Cube ${pack.cubes.length + 1}` });
+    savePack(trip);
+  }
+});
+
+packBodyArea.addEventListener('change', e => {
+  const assignEl = e.target.closest('[data-cube-assign]');
+  if (!assignEl) return;
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const pack = trip.packs[currentPackIdx];
+  if (!pack) return;
+  const p = pack.items.find(p => p.gearId === assignEl.dataset.cubeAssign);
+  if (p) {
+    p.cubeId = assignEl.value || null;
     savePack(trip);
   }
 });
