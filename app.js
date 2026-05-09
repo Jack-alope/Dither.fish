@@ -212,9 +212,9 @@ const notePopup     = document.getElementById('note-popup');
 const notePopupText = document.getElementById('note-popup-text');
 document.getElementById('note-popup-close').addEventListener('click', () => notePopup.classList.add('hidden'));
 document.addEventListener('click', e => {
-  const btn = e.target.closest('.note-icon-btn');
-  if (btn) {
-    notePopupText.textContent = btn.dataset.note;
+  const trigger = e.target.closest('.note-icon-btn, .item-name-link');
+  if (trigger) {
+    notePopupText.textContent = trigger.dataset.note;
     notePopup.classList.remove('hidden');
     return;
   }
@@ -313,16 +313,17 @@ function renderGear() {
       <table class="gear-table">
         <thead>
           <tr>
-            <th>Name</th><th>Weight (g)</th><th>Qty</th><th>Notes</th><th></th>
+            <th>Name</th><th>Qty</th><th></th>
           </tr>
         </thead>
         <tbody>
           ${items.map(g => `
             <tr>
-              <td><strong>${esc(g.name)}</strong></td>
-              <td>${g.weight != null && g.weight !== '' ? g.weight : '—'}</td>
+              <td>
+                <strong ${g.notes ? `class="item-name-link" data-note="${esc(g.notes)}" title="Click to view notes"` : ''}>${esc(g.name)}</strong>
+                ${(g.brand || g.weight != null) ? `<div class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
+              </td>
               <td>${g.qty ?? 1}</td>
-              <td>${g.notes ? `<button class="note-icon-btn" data-note="${esc(g.notes)}" title="View notes">ℹ</button>` : '—'}</td>
               <td class="col-actions">
                 <button data-edit="${g.id}">Edit</button>
                 <button data-delete="${g.id}" class="del">Delete</button>
@@ -975,15 +976,15 @@ function renderCatalog() {
       </div>
       <table class="gear-table">
         <thead>
-          <tr><th>Name</th><th>Brand</th><th>Weight (g)</th><th>Notes</th><th></th></tr>
+          <tr><th>Name</th><th></th></tr>
         </thead>
         <tbody>
           ${items.map(c => `
             <tr>
-              <td><strong>${esc(c.name)}</strong></td>
-              <td>${esc(c.brand) || '—'}</td>
-              <td>${c.weight != null ? c.weight : '—'}</td>
-              <td>${c.notes ? `<button class="note-icon-btn" data-note="${esc(c.notes)}" title="View notes">ℹ</button>` : '—'}</td>
+              <td>
+                <strong ${c.notes ? `class="item-name-link" data-note="${esc(c.notes)}" title="Click to view notes"` : ''}>${esc(c.name)}</strong>
+                ${(c.brand || c.weight != null) ? `<div class="item-brand">${[c.brand, c.weight != null ? `${c.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
+              </td>
               <td class="col-actions">
                 <button class="btn-add-from-catalog" data-catalog-id="${c.id}">+ My Gear</button>
                 ${currentIsAdmin ? `<button data-catalog-edit="${c._id ?? c.id}">Edit</button><button data-catalog-delete="${c._id ?? c.id}" class="del">Delete</button>` : ''}

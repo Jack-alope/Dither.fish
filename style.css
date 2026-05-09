@@ -271,6 +271,11 @@ main {
   flex-direction: column;
   gap: 1.25rem;
 }
+#catalog-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
 .gear-block {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -355,6 +360,20 @@ main {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.item-name-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--text-muted);
+}
+.item-name-link:hover { text-decoration-color: var(--accent); color: var(--accent); }
+.item-brand {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 0.1rem;
 }
 .note-icon-btn {
   background: none;
