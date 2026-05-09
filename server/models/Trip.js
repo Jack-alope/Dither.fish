@@ -5,6 +5,7 @@ const packItemSchema = new mongoose.Schema({
   qty:     { type: Number, default: 1 },
   cubeId:  { type: String, default: null },
   checked: { type: Boolean, default: false },
+  type:    { type: String, enum: ['base', 'worn', 'consumable'], default: 'base' },
 }, { _id: false });
 
 const cubeSchema = new mongoose.Schema({

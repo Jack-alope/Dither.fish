@@ -1,4 +1,4 @@
-const CACHE = 'dither-v2';
+const CACHE = 'dither-v4';
 const STATIC = [
   '/',
   '/app.js',
