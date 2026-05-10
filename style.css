@@ -404,6 +404,21 @@ main {
   line-height: 1.5;
   color: var(--text);
 }
+.note-popup-header {
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.note-popup-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.note-popup-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
 .note-popup p { margin: 0; white-space: pre-wrap; }
 .note-popup-close {
   position: absolute;

@@ -210,10 +210,16 @@ function buildWeightChart(byCategory) {
 // ── Notes popup ──────────────────────────────────────────────────────────────
 const notePopup     = document.getElementById('note-popup');
 const notePopupText = document.getElementById('note-popup-text');
+const notePopupName = document.getElementById('note-popup-name');
+const notePopupMeta = document.getElementById('note-popup-meta');
 document.getElementById('note-popup-close').addEventListener('click', () => notePopup.classList.add('hidden'));
 document.addEventListener('click', e => {
   const trigger = e.target.closest('.note-icon-btn, .item-name-link');
   if (trigger) {
+    notePopupName.textContent = trigger.dataset.itemName || '';
+    notePopupMeta.textContent = [trigger.dataset.itemBrand, trigger.dataset.itemWeight].filter(Boolean).join(' · ');
+    notePopupName.style.display = trigger.dataset.itemName ? '' : 'none';
+    notePopupMeta.style.display = notePopupMeta.textContent ? '' : 'none';
     notePopupText.textContent = trigger.dataset.note;
     notePopup.classList.remove('hidden');
     return;
@@ -263,6 +269,7 @@ const gearEmpty     = document.getElementById('gear-empty');
 const gearSearch    = document.getElementById('gear-search');
 const catFilter     = document.getElementById('gear-category-filter');
 const catDatalist   = document.getElementById('category-list');
+const brandDatalist = document.getElementById('brand-list');
 
 document.getElementById('btn-add-item').addEventListener('click', () => openItemModal());
 gearSearch.addEventListener('input', renderGear);
@@ -278,6 +285,8 @@ function refreshCategoryUI() {
   const current = catFilter.value;
   catFilter.innerHTML = `<option value="">All categories</option>` +
     cats.map(c => `<option value="${esc(c)}" ${c === current ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  const brands = [...new Set(gear.map(g => g.brand).filter(Boolean))].sort();
+  brandDatalist.innerHTML = brands.map(b => `<option value="${esc(b)}">`).join('');
 }
 
 function renderGear() {
@@ -313,17 +322,17 @@ function renderGear() {
       <table class="gear-table">
         <thead>
           <tr>
-            <th>Name</th><th>Qty</th><th></th>
+            <th style="width:100%">Name</th><th style="text-align:right;white-space:nowrap">Qty</th><th></th>
           </tr>
         </thead>
         <tbody>
           ${items.map(g => `
             <tr>
               <td>
-                <strong ${g.notes ? `class="item-name-link" data-note="${esc(g.notes)}" title="Click to view notes"` : ''}>${esc(g.name)}</strong>
+                <strong ${g.notes ? `class="item-name-link" data-note="${esc(g.notes)}" data-item-name="${esc(g.name)}" data-item-brand="${esc(g.brand || '')}" data-item-weight="${g.weight != null ? g.weight + 'g' : ''}" title="Click to view notes"` : ''}>${esc(g.name)}</strong>
                 ${(g.brand || g.weight != null) ? `<div class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
               </td>
-              <td>${g.qty ?? 1}</td>
+              <td style="text-align:right">${g.qty ?? 1}</td>
               <td class="col-actions">
                 <button data-edit="${g.id}">Edit</button>
                 <button data-delete="${g.id}" class="del">Delete</button>
@@ -349,6 +358,7 @@ function openItemModal(item = null) {
   document.getElementById('modal-item-title').textContent = item ? 'Edit Item' : 'Add Item';
   if (item) {
     form.name.value     = item.name;
+    form.brand.value    = item.brand || '';
     form.category.value = item.category || '';
     form.weight.value   = item.weight ?? '';
     form.qty.value      = item.qty ?? 1;
@@ -366,6 +376,7 @@ document.getElementById('form-item').addEventListener('submit', async e => {
   const id = fd.get('id');
   const payload = {
     name:     fd.get('name').trim(),
+    brand:    fd.get('brand').trim(),
     category: fd.get('category').trim(),
     weight:   fd.get('weight') !== '' ? parseFloat(fd.get('weight')) : null,
     qty:      parseInt(fd.get('qty')) || 1,
@@ -982,7 +993,7 @@ function renderCatalog() {
           ${items.map(c => `
             <tr>
               <td>
-                <strong ${c.notes ? `class="item-name-link" data-note="${esc(c.notes)}" title="Click to view notes"` : ''}>${esc(c.name)}</strong>
+                <strong ${c.notes ? `class="item-name-link" data-note="${esc(c.notes)}" data-item-name="${esc(c.name)}" data-item-brand="${esc(c.brand || '')}" data-item-weight="${c.weight != null ? c.weight + 'g' : ''}" title="Click to view notes"` : ''}>${esc(c.name)}</strong>
                 ${(c.brand || c.weight != null) ? `<div class="item-brand">${[c.brand, c.weight != null ? `${c.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
               </td>
               <td class="col-actions">
