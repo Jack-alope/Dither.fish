@@ -87,6 +87,14 @@ function normalizeTrip(t)  {
       ...pk,
       cubes: (pk.cubes || []).map(c => ({ ...c, id: String(c._id ?? c.id) })),
       items: (pk.items || []).map(p => ({ ...p, gearId: p.gearId?._id ?? p.gearId })),
+      bundleRefs: (pk.bundleRefs || []).map(br => ({
+        ...br,
+        bundleId: String(br.bundleId),
+        checkedItems: (br.checkedItems || []).map(String),
+        itemTypes: (br.itemTypes || []).map(it => ({ gearId: String(it.gearId), type: it.type || 'base' })),
+        expanded: br.expanded ?? false,
+        cubeId: br.cubeId || null,
+      })),
     }));
   }
   return base;
@@ -705,6 +713,7 @@ function renderPackSection(trip) {
   if (!pack) { packBodyArea.innerHTML = ''; return; }
 
   const items = pack.items || [];
+  const bundleRefs = pack.bundleRefs || [];
   let baseWeight = 0, wornWeight = 0, consumableWeight = 0;
   items.forEach(p => {
     const g = gear.find(g => g.id === p.gearId);
@@ -714,8 +723,31 @@ function renderPackSection(trip) {
     else if (p.type === 'consumable') consumableWeight += w;
     else baseWeight += w;
   });
-  const checkedCount = items.filter(p => p.checked).length;
-  const statsText = items.length ? `${checkedCount}/${items.length} packed` : '';
+  bundleRefs.forEach(br => {
+    const b = bundles.find(b => b.id === br.bundleId);
+    if (!b) return;
+    b.items.forEach(({ gearId, qty }) => {
+      const g = gear.find(g => g.id === gearId);
+      if (!g?.weight) return;
+      const w = g.weight * qty;
+      const itemType = (br.itemTypes || []).find(t => t.gearId === gearId)?.type || 'base';
+      if (itemType === 'worn') wornWeight += w;
+      else if (itemType === 'consumable') consumableWeight += w;
+      else baseWeight += w;
+    });
+  });
+  const itemCheckedCount = items.filter(p => p.checked).length;
+  const bundleCheckedCount = bundleRefs.reduce((sum, br) => {
+    const b = bundles.find(b => b.id === br.bundleId);
+    return sum + (b?.items.filter(i => br.checkedItems.includes(i.gearId)).length || 0);
+  }, 0);
+  const bundleTotalCount = bundleRefs.reduce((sum, br) => {
+    const b = bundles.find(b => b.id === br.bundleId);
+    return sum + (b?.items.length || 0);
+  }, 0);
+  const totalChecked = itemCheckedCount + bundleCheckedCount;
+  const totalCount = items.length + bundleTotalCount;
+  const statsText = totalCount ? `${totalChecked}/${totalCount} packed` : '';
 
   const cubes    = pack.cubes || [];
   const hasCubes = cubes.length > 0;
@@ -748,11 +780,53 @@ function renderPackSection(trip) {
 
   const ungrouped = items.filter(p => !p.cubeId || !cubes.find(c => c.id === p.cubeId));
 
+  function renderBundleGroup(br) {
+    const b = bundles.find(b => b.id === br.bundleId);
+    if (!b) return '';
+    const bItems = b.items.filter(i => gear.find(g => g.id === i.gearId));
+    const bChecked = bItems.filter(i => br.checkedItems.includes(i.gearId)).length;
+    const exp = br.expanded;
+    return `
+      <div class="pack-bundle-group${exp ? ' expanded' : ''}">
+        <div class="pack-bundle-header" data-toggle-bundle="${b.id}" draggable="true" data-drag-bundle="${b.id}">
+          <span class="drag-handle" title="Drag to cube">⠿</span>
+          <span class="pack-bundle-chevron">${exp ? '▾' : '▸'}</span>
+          <span class="pack-bundle-name">${esc(b.name)}</span>
+          <span class="pack-bundle-stats">${bChecked}/${bItems.length} packed</span>
+          <button class="pack-bundle-remove" data-remove-bundle="${b.id}" title="Remove bundle">✕</button>
+        </div>
+        ${exp ? `<ul class="pack-bundle-items">
+          ${bItems.map(({ gearId, qty }) => {
+            const g = gear.find(g => g.id === gearId);
+            if (!g) return '';
+            const checked = br.checkedItems.includes(gearId);
+            const lineWeight = g.weight != null ? formatWeight(g.weight * qty) : null;
+            const itemType = (br.itemTypes || []).find(t => t.gearId === gearId)?.type || 'base';
+            return `
+              <li class="pack-item${checked ? ' pack-item-checked' : ''}">
+                <input type="checkbox" class="pack-check" data-bundle-check="${gearId}" data-bundle-id="${b.id}" ${checked ? 'checked' : ''} />
+                <div class="pack-item-info">
+                  <div class="pack-item-name">${esc(g.name)}</div>
+                  <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
+                </div>
+                ${qty > 1 ? `<span class="pack-bundle-qty">×${qty}</span>` : ''}
+                <div class="item-type-toggle">
+                  <button class="item-type-btn${itemType === 'worn' ? ' active' : ''}" data-bundle-type-set="${gearId}" data-bundle-id="${b.id}" data-type="${itemType === 'worn' ? 'base' : 'worn'}" title="Worn"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M5 2Q6.5 5 8 5Q9.5 5 11 2L14 4l-2 3-2-1v7H6V6L4 7 2 4z"/></svg></button>
+                  <button class="item-type-btn${itemType === 'consumable' ? ' active' : ''}" data-bundle-type-set="${gearId}" data-bundle-id="${b.id}" data-type="${itemType === 'consumable' ? 'base' : 'consumable'}" title="Consumable"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" stroke="none"><path d="M8 1.5L4 9.5a4 4 0 008 0z"/></svg></button>
+                </div>
+              </li>`;
+          }).join('')}
+        </ul>` : ''}
+      </div>`;
+  }
+
+  const ungroupedBundles = bundleRefs.filter(br => !br.cubeId || !cubes.find(c => c.id === br.cubeId));
+
   packBodyArea.innerHTML = `
     <div class="pack-name-row">
       <span class="pack-name-label">${esc(pack.name || `Pack ${currentPackIdx + 1}`)}</span>
       <button class="btn-link" data-rename-pack>Rename</button>
-      ${items.length ? `<button class="btn-link" data-reset-checklist>Reset</button>` : ''}
+      ${totalCount ? `<button class="btn-link" data-reset-checklist>Reset</button>` : ''}
     </div>
     ${statsText ? `<p class="pack-stats">${statsText}</p>` : ''}
     ${baseWeight || wornWeight || consumableWeight ? `
@@ -765,6 +839,7 @@ function renderPackSection(trip) {
 
     ${cubes.map(c => {
       const cubeItems = items.filter(p => p.cubeId === c.id);
+      const cubeBundles = bundleRefs.filter(br => br.cubeId === c.id);
       return `
         <div class="cube-block" data-drop-zone="${c.id}">
           <div class="cube-header">
@@ -772,16 +847,18 @@ function renderPackSection(trip) {
             <button class="btn-link" data-rename-cube="${c.id}">Rename</button>
             <button class="cube-del" data-del-cube="${c.id}" title="Remove cube">×</button>
           </div>
+          ${cubeBundles.map(renderBundleGroup).join('')}
           <ul class="pack-list">${cubeItems.map(renderItem).join('')}</ul>
-          ${!cubeItems.length ? '<p class="cube-empty">Drag items here to group them.</p>' : ''}
+          ${!cubeItems.length && !cubeBundles.length ? '<p class="cube-empty">Drag items here to group them.</p>' : ''}
         </div>`;
     }).join('')}
 
-    ${ungrouped.length || !hasCubes ? `
+    ${ungrouped.length || ungroupedBundles.length || !hasCubes ? `
       <div class="cube-block cube-ungrouped" data-drop-zone="ungrouped">
         ${hasCubes ? '<div class="cube-header"><span class="cube-name">Ungrouped</span></div>' : ''}
+        ${ungroupedBundles.map(renderBundleGroup).join('')}
         <ul class="pack-list">${ungrouped.map(renderItem).join('')}</ul>
-        ${!items.length ? '<p class="empty-msg">No items in this pack yet.</p>' : ''}
+        ${!items.length && !bundleRefs.length ? '<p class="empty-msg">No items in this pack yet.</p>' : ''}
       </div>` : ''}
 
     <button class="btn-new-cube" data-new-cube>+ Add Cube</button>`;
@@ -835,14 +912,16 @@ packBodyArea.addEventListener('click', e => {
   const pack = trip.packs[currentPackIdx];
   if (!pack) return;
 
-  const incId       = e.target.closest('[data-qty-inc]')?.dataset.qtyInc;
-  const decId       = e.target.closest('[data-qty-dec]')?.dataset.qtyDec;
-  const remId       = e.target.closest('[data-remove]')?.dataset.remove;
-  const isRenamePack = e.target.closest('[data-rename-pack]');
-  const renameCubeId = e.target.closest('[data-rename-cube]')?.dataset.renameCube;
-  const delCubeId    = e.target.closest('[data-del-cube]')?.dataset.delCube;
-  const isNewCube    = e.target.closest('[data-new-cube]');
-  const typeBtn      = e.target.closest('[data-type-set]');
+  const incId         = e.target.closest('[data-qty-inc]')?.dataset.qtyInc;
+  const decId         = e.target.closest('[data-qty-dec]')?.dataset.qtyDec;
+  const remId         = e.target.closest('[data-remove]')?.dataset.remove;
+  const removeBundleId = e.target.closest('[data-remove-bundle]')?.dataset.removeBundle;
+  const toggleBundleId = !removeBundleId ? e.target.closest('[data-toggle-bundle]')?.dataset.toggleBundle : null;
+  const isRenamePack  = e.target.closest('[data-rename-pack]');
+  const renameCubeId  = e.target.closest('[data-rename-cube]')?.dataset.renameCube;
+  const delCubeId     = e.target.closest('[data-del-cube]')?.dataset.delCube;
+  const isNewCube     = e.target.closest('[data-new-cube]');
+  const typeBtn       = e.target.closest('[data-type-set]');
 
   if (incId) {
     const p = pack.items.find(p => p.gearId === incId);
@@ -859,6 +938,14 @@ packBodyArea.addEventListener('click', e => {
   if (remId) {
     pack.items = pack.items.filter(p => p.gearId !== remId);
     savePack(trip);
+  }
+  if (removeBundleId) {
+    pack.bundleRefs = (pack.bundleRefs || []).filter(br => br.bundleId !== removeBundleId);
+    savePack(trip);
+  }
+  if (toggleBundleId) {
+    const br = (pack.bundleRefs || []).find(br => br.bundleId === toggleBundleId);
+    if (br) { br.expanded = !br.expanded; renderPackSection(trip); }
   }
   if (isRenamePack) {
     const newName = prompt('Pack name:', pack.name || `Pack ${currentPackIdx + 1}`);
@@ -893,9 +980,22 @@ packBodyArea.addEventListener('click', e => {
     const p = pack.items.find(p => p.gearId === typeBtn.dataset.typeSet);
     if (p) { p.type = typeBtn.dataset.type; savePack(trip); }
   }
+  const bundleTypeBtn = e.target.closest('[data-bundle-type-set]');
+  if (bundleTypeBtn) {
+    const br = (pack.bundleRefs || []).find(br => br.bundleId === bundleTypeBtn.dataset.bundleId);
+    if (br) {
+      const gearId = bundleTypeBtn.dataset.bundleTypeSet;
+      br.itemTypes = br.itemTypes || [];
+      const existing = br.itemTypes.find(t => t.gearId === gearId);
+      if (existing) existing.type = bundleTypeBtn.dataset.type;
+      else br.itemTypes.push({ gearId, type: bundleTypeBtn.dataset.type });
+      savePack(trip);
+    }
+  }
   const isReset = e.target.closest('[data-reset-checklist]');
   if (isReset) {
     pack.items.forEach(p => { p.checked = false; });
+    (pack.bundleRefs || []).forEach(br => { br.checkedItems = []; });
     savePack(trip);
   }
   if (e.target.closest('[data-weight-chart]')) {
@@ -905,6 +1005,18 @@ packBodyArea.addEventListener('click', e => {
       if (!g?.weight) return;
       const cat = g.category || 'Uncategorized';
       byCategory[cat] = (byCategory[cat] || 0) + g.weight * p.qty;
+    });
+    (pack.bundleRefs || []).forEach(br => {
+      const b = bundles.find(b => b.id === br.bundleId);
+      if (!b) return;
+      b.items.forEach(({ gearId, qty }) => {
+        const g = gear.find(g => g.id === gearId);
+        if (!g?.weight) return;
+        const itemType = (br.itemTypes || []).find(t => t.gearId === gearId)?.type || 'base';
+        if (itemType !== 'base') return;
+        const cat = g.category || 'Uncategorized';
+        byCategory[cat] = (byCategory[cat] || 0) + g.weight * qty;
+      });
     });
     weightChartContent.innerHTML = buildWeightChart(byCategory);
     weightChartPopup.classList.remove('hidden');
@@ -925,11 +1037,31 @@ packBodyArea.addEventListener('change', e => {
       savePack(trip);
     }
   }
+  const bundleCheckEl = e.target.closest('[data-bundle-check]');
+  if (bundleCheckEl) {
+    const br = (pack.bundleRefs || []).find(br => br.bundleId === bundleCheckEl.dataset.bundleId);
+    if (br) {
+      const gearId = bundleCheckEl.dataset.bundleCheck;
+      if (bundleCheckEl.checked) {
+        if (!br.checkedItems.includes(gearId)) br.checkedItems.push(gearId);
+      } else {
+        br.checkedItems = br.checkedItems.filter(id => id !== gearId);
+      }
+      savePack(trip);
+    }
+  }
 });
 
 // ── Drag-and-drop cube assignment ─────────────────────────────────────────────
 
 packBodyArea.addEventListener('dragstart', e => {
+  const bundleHeader = e.target.closest('[data-drag-bundle]');
+  if (bundleHeader) {
+    e.dataTransfer.setData('text/plain', `bundle:${bundleHeader.dataset.dragBundle}`);
+    e.dataTransfer.effectAllowed = 'move';
+    bundleHeader.closest('.pack-bundle-group')?.classList.add('dragging');
+    return;
+  }
   const item = e.target.closest('.pack-item[draggable]');
   if (!item) return;
   e.dataTransfer.setData('text/plain', item.dataset.dragId);
@@ -961,14 +1093,21 @@ packBodyArea.addEventListener('drop', e => {
   const zone = e.target.closest('[data-drop-zone]');
   if (!zone) return;
   zone.classList.remove('drag-over');
-  const gearId = e.dataTransfer.getData('text/plain');
+  const raw = e.dataTransfer.getData('text/plain');
   const trip = trips.find(t => t.id === currentTripId);
   if (!trip) return;
   const pack = trip.packs[currentPackIdx];
   if (!pack) return;
-  const p = pack.items.find(p => p.gearId === gearId);
+  const newCubeId = zone.dataset.dropZone === 'ungrouped' ? null : zone.dataset.dropZone;
+  if (raw.startsWith('bundle:')) {
+    const bundleId = raw.slice(7);
+    const br = (pack.bundleRefs || []).find(br => br.bundleId === bundleId);
+    if (br) { br.cubeId = newCubeId; savePack(trip); }
+    return;
+  }
+  const p = pack.items.find(p => p.gearId === raw);
   if (!p) return;
-  p.cubeId = zone.dataset.dropZone === 'ungrouped' ? null : zone.dataset.dropZone;
+  p.cubeId = newCubeId;
   savePack(trip);
 });
 
@@ -978,19 +1117,20 @@ function renderPickerBundles() {
   if (!bundles.length) { section.innerHTML = ''; return; }
   const trip = trips.find(t => t.id === currentTripId);
   const pack = trip?.packs[currentPackIdx];
-  const inPack = new Set((pack?.items || []).map(p => p.gearId));
+  const addedBundleIds = new Set((pack?.bundleRefs || []).map(br => br.bundleId));
   section.innerHTML = `
     <h3>Bundles</h3>
     <ul class="picker-bundle-list">
       ${bundles.map(b => {
         const validItems = b.items.filter(i => gear.find(g => g.id === i.gearId));
+        const already = addedBundleIds.has(b.id);
         return `
           <li class="picker-bundle-item">
             <div class="picker-bundle-info">
               <span class="picker-bundle-name">${esc(b.name)}</span>
               <span class="picker-bundle-count">${validItems.length} item${validItems.length !== 1 ? 's' : ''}</span>
             </div>
-            <button class="picker-bundle-add" data-add-bundle="${b.id}">+ Add</button>
+            <button class="picker-bundle-add${already ? ' in-pack' : ''}" data-add-bundle="${b.id}" ${already ? 'disabled' : ''}>${already ? '✓' : '+ Add'}</button>
           </li>`;
       }).join('')}
     </ul>
@@ -1048,14 +1188,11 @@ document.getElementById('picker-bundles-section').addEventListener('click', e =>
   if (!trip) return;
   const pack = trip.packs[currentPackIdx];
   if (!pack) return;
-  let changed = false;
-  b.items.forEach(({ gearId, qty }) => {
-    if (!pack.items.find(p => p.gearId === gearId)) {
-      pack.items.push({ gearId, qty });
-      changed = true;
-    }
-  });
-  if (changed) savePack(trip);
+  pack.bundleRefs = pack.bundleRefs || [];
+  if (!pack.bundleRefs.find(br => br.bundleId === b.id)) {
+    pack.bundleRefs.push({ bundleId: b.id, expanded: false, checkedItems: [] });
+    savePack(trip);
+  }
 });
 
 pickerList.addEventListener('click', e => {
