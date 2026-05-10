@@ -159,14 +159,62 @@ function logout() {
 }
 document.getElementById('btn-logout').addEventListener('click', logout);
 
+// ── Weight chart popup ───────────────────────────────────────────────────────
+const weightChartPopup   = document.getElementById('weight-chart-popup');
+const weightChartContent = document.getElementById('weight-chart-content');
+document.getElementById('weight-chart-close').addEventListener('click', () => weightChartPopup.classList.add('hidden'));
+document.addEventListener('click', e => {
+  if (!weightChartPopup.contains(e.target) && !e.target.closest('[data-weight-chart]'))
+    weightChartPopup.classList.add('hidden');
+});
+
+const CHART_COLORS = ['#2d6a4f','#5b8dd9','#e07b39','#9b59b6','#e74c3c','#16a085','#d4a017','#2980b9'];
+
+function buildWeightChart(byCategory) {
+  const segments = Object.entries(byCategory)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, value], i) => ({ label, value, color: CHART_COLORS[i % CHART_COLORS.length] }));
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  if (!total) return '<p style="color:var(--text-muted);text-align:center;padding:1rem 0">No weighted items.</p>';
+
+  const cx = 70, cy = 70, r = 58;
+  let paths = '';
+  let angle = -Math.PI / 2;
+  if (segments.length === 1) {
+    paths = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${segments[0].color}"/>`;
+  } else {
+    for (const seg of segments) {
+      const sweep = (seg.value / total) * 2 * Math.PI;
+      const x1 = cx + r * Math.cos(angle);
+      const y1 = cy + r * Math.sin(angle);
+      angle += sweep;
+      const x2 = cx + r * Math.cos(angle);
+      const y2 = cy + r * Math.sin(angle);
+      paths += `<path d="M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${sweep > Math.PI ? 1 : 0} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${seg.color}"/>`;
+    }
+  }
+
+  const legend = segments.map(s => `
+    <div class="chart-legend-row">
+      <span class="chart-legend-dot" style="background:${s.color}"></span>
+      <span class="chart-legend-label">${esc(s.label)}</span>
+      <span class="chart-legend-value">${formatWeight(s.value)}</span>
+    </div>`).join('');
+
+  return `
+    <svg viewBox="0 0 140 140" width="140" height="140" style="display:block;margin:0 auto">${paths}</svg>
+    <div class="chart-legend">${legend}</div>`;
+}
+
 // ── Notes popup ──────────────────────────────────────────────────────────────
 const notePopup     = document.getElementById('note-popup');
 const notePopupText = document.getElementById('note-popup-text');
 document.getElementById('note-popup-close').addEventListener('click', () => notePopup.classList.add('hidden'));
 document.addEventListener('click', e => {
-  const btn = e.target.closest('.note-icon-btn');
-  if (btn) {
-    notePopupText.textContent = btn.dataset.note;
+  const trigger = e.target.closest('.note-icon-btn, .item-name-link');
+  if (trigger) {
+    notePopupText.textContent = trigger.dataset.note;
     notePopup.classList.remove('hidden');
     return;
   }
@@ -214,21 +262,14 @@ const gearContainer = document.getElementById('gear-container');
 const gearEmpty     = document.getElementById('gear-empty');
 const gearSearch    = document.getElementById('gear-search');
 const catFilter     = document.getElementById('gear-category-filter');
-const brandFilter   = document.getElementById('gear-brand-filter');
 const catDatalist   = document.getElementById('category-list');
-const brandDatalist = document.getElementById('brand-list');
 
 document.getElementById('btn-add-item').addEventListener('click', () => openItemModal());
 gearSearch.addEventListener('input', renderGear);
 catFilter.addEventListener('change', renderGear);
-brandFilter.addEventListener('change', renderGear);
 
 function categories() {
   return [...new Set(gear.map(g => g.category).filter(Boolean))].sort();
-}
-
-function brands() {
-  return [...new Set(gear.map(g => g.brand).filter(Boolean))].sort();
 }
 
 function refreshCategoryUI() {
@@ -237,23 +278,15 @@ function refreshCategoryUI() {
   const current = catFilter.value;
   catFilter.innerHTML = `<option value="">All categories</option>` +
     cats.map(c => `<option value="${esc(c)}" ${c === current ? 'selected' : ''}>${esc(c)}</option>`).join('');
-
-  const bs = brands();
-  brandDatalist.innerHTML = bs.map(b => `<option value="${esc(b)}">`).join('');
-  const curBrand = brandFilter.value;
-  brandFilter.innerHTML = `<option value="">All brands</option>` +
-    bs.map(b => `<option value="${esc(b)}" ${b === curBrand ? 'selected' : ''}>${esc(b)}</option>`).join('');
 }
 
 function renderGear() {
   refreshCategoryUI();
-  const q      = gearSearch.value.toLowerCase();
-  const cat    = catFilter.value;
-  const brand  = brandFilter.value;
+  const q   = gearSearch.value.toLowerCase();
+  const cat = catFilter.value;
   const filtered = gear.filter(g =>
-    (!q     || g.name.toLowerCase().includes(q) || (g.brand || '').toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
-    (!cat   || g.category === cat) &&
-    (!brand || g.brand === brand)
+    (!q   || g.name.toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
+    (!cat || g.category === cat)
   );
   gearEmpty.style.display = filtered.length ? 'none' : 'block';
   gearContainer.style.display = filtered.length ? '' : 'none';
@@ -280,17 +313,17 @@ function renderGear() {
       <table class="gear-table">
         <thead>
           <tr>
-            <th>Name</th><th>Brand</th><th>Weight (g)</th><th>Qty</th><th>Notes</th><th></th>
+            <th>Name</th><th>Qty</th><th></th>
           </tr>
         </thead>
         <tbody>
           ${items.map(g => `
             <tr>
-              <td><strong>${esc(g.name)}</strong></td>
-              <td>${esc(g.brand) || '—'}</td>
-              <td>${g.weight != null && g.weight !== '' ? g.weight : '—'}</td>
+              <td>
+                <strong ${g.notes ? `class="item-name-link" data-note="${esc(g.notes)}" title="Click to view notes"` : ''}>${esc(g.name)}</strong>
+                ${(g.brand || g.weight != null) ? `<div class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
+              </td>
               <td>${g.qty ?? 1}</td>
-              <td>${g.notes ? `<button class="note-icon-btn" data-note="${esc(g.notes)}" title="View notes">ℹ</button>` : '—'}</td>
               <td class="col-actions">
                 <button data-edit="${g.id}">Edit</button>
                 <button data-delete="${g.id}" class="del">Delete</button>
@@ -316,7 +349,6 @@ function openItemModal(item = null) {
   document.getElementById('modal-item-title').textContent = item ? 'Edit Item' : 'Add Item';
   if (item) {
     form.name.value     = item.name;
-    form.brand.value    = item.brand || '';
     form.category.value = item.category || '';
     form.weight.value   = item.weight ?? '';
     form.qty.value      = item.qty ?? 1;
@@ -334,7 +366,6 @@ document.getElementById('form-item').addEventListener('submit', async e => {
   const id = fd.get('id');
   const payload = {
     name:     fd.get('name').trim(),
-    brand:    fd.get('brand').trim(),
     category: fd.get('category').trim(),
     weight:   fd.get('weight') !== '' ? parseFloat(fd.get('weight')) : null,
     qty:      parseInt(fd.get('qty')) || 1,
@@ -513,15 +544,17 @@ function renderPackSection(trip) {
   if (!pack) { packBodyArea.innerHTML = ''; return; }
 
   const items = pack.items || [];
-  let totalWeight = 0;
+  let baseWeight = 0, wornWeight = 0, consumableWeight = 0;
   items.forEach(p => {
     const g = gear.find(g => g.id === p.gearId);
-    if (g?.weight) totalWeight += g.weight * p.qty;
+    if (!g?.weight) return;
+    const w = g.weight * p.qty;
+    if (p.type === 'worn') wornWeight += w;
+    else if (p.type === 'consumable') consumableWeight += w;
+    else baseWeight += w;
   });
   const checkedCount = items.filter(p => p.checked).length;
-  const statsText = items.length
-    ? `${checkedCount}/${items.length} packed · ${formatWeight(totalWeight)} total`
-    : '';
+  const statsText = items.length ? `${checkedCount}/${items.length} packed` : '';
 
   const cubes    = pack.cubes || [];
   const hasCubes = cubes.length > 0;
@@ -530,8 +563,10 @@ function renderPackSection(trip) {
     const g = gear.find(g => g.id === p.gearId);
     if (!g) return '';
     const lineWeight = g.weight != null ? formatWeight(g.weight * p.qty) : null;
+    const itemType = p.type || 'base';
     return `
-      <li class="pack-item${p.checked ? ' pack-item-checked' : ''}">
+      <li class="pack-item${p.checked ? ' pack-item-checked' : ''}" draggable="true" data-drag-id="${g.id}">
+        <span class="drag-handle" title="Drag to cube">⠿</span>
         <input type="checkbox" class="pack-check" data-check="${g.id}" ${p.checked ? 'checked' : ''} />
         <div class="pack-item-info">
           <div class="pack-item-name">${esc(g.name)}</div>
@@ -542,11 +577,10 @@ function renderPackSection(trip) {
           <span>${p.qty}</span>
           <button data-qty-inc="${g.id}">+</button>
         </div>
-        ${hasCubes ? `
-          <select class="cube-select" data-cube-assign="${g.id}">
-            <option value="">No cube</option>
-            ${cubes.map(c => `<option value="${c.id}" ${p.cubeId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
-          </select>` : ''}
+        <div class="item-type-toggle">
+          <button class="item-type-btn${itemType === 'worn' ? ' active' : ''}" data-type-set="${g.id}" data-type="${itemType === 'worn' ? 'base' : 'worn'}" title="Worn"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M5 2Q6.5 5 8 5Q9.5 5 11 2L14 4l-2 3-2-1v7H6V6L4 7 2 4z"/></svg></button>
+          <button class="item-type-btn${itemType === 'consumable' ? ' active' : ''}" data-type-set="${g.id}" data-type="${itemType === 'consumable' ? 'base' : 'consumable'}" title="Consumable"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" stroke="none"><path d="M8 1.5L4 9.5a4 4 0 008 0z"/></svg></button>
+        </div>
         <button class="pack-item-remove" data-remove="${g.id}" title="Remove">✕</button>
       </li>`;
   }
@@ -560,23 +594,30 @@ function renderPackSection(trip) {
       ${items.length ? `<button class="btn-link" data-reset-checklist>Reset</button>` : ''}
     </div>
     ${statsText ? `<p class="pack-stats">${statsText}</p>` : ''}
+    ${baseWeight || wornWeight || consumableWeight ? `
+    <div class="pack-weights">
+      ${baseWeight ? `<span class="pack-weight-row"><span class="pack-weight-label">Base</span>${formatWeight(baseWeight)}</span>` : ''}
+      ${wornWeight ? `<span class="pack-weight-row"><span class="pack-weight-label">Worn</span>${formatWeight(wornWeight)}</span>` : ''}
+      ${consumableWeight ? `<span class="pack-weight-row"><span class="pack-weight-label">Consumable</span>${formatWeight(consumableWeight)}</span>` : ''}
+      <button class="pack-chart-btn" data-weight-chart title="Weight breakdown"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 2v6l4 3"/></svg></button>
+    </div>` : ''}
 
     ${cubes.map(c => {
       const cubeItems = items.filter(p => p.cubeId === c.id);
       return `
-        <div class="cube-block">
+        <div class="cube-block" data-drop-zone="${c.id}">
           <div class="cube-header">
             <span class="cube-name">${esc(c.name)}</span>
             <button class="btn-link" data-rename-cube="${c.id}">Rename</button>
             <button class="cube-del" data-del-cube="${c.id}" title="Remove cube">×</button>
           </div>
           <ul class="pack-list">${cubeItems.map(renderItem).join('')}</ul>
-          ${!cubeItems.length ? '<p class="cube-empty">Empty — assign items using the dropdown on each item.</p>' : ''}
+          ${!cubeItems.length ? '<p class="cube-empty">Drag items here to group them.</p>' : ''}
         </div>`;
     }).join('')}
 
     ${ungrouped.length || !hasCubes ? `
-      <div class="cube-block cube-ungrouped">
+      <div class="cube-block cube-ungrouped" data-drop-zone="ungrouped">
         ${hasCubes ? '<div class="cube-header"><span class="cube-name">Ungrouped</span></div>' : ''}
         <ul class="pack-list">${ungrouped.map(renderItem).join('')}</ul>
         ${!items.length ? '<p class="empty-msg">No items in this pack yet.</p>' : ''}
@@ -640,6 +681,7 @@ packBodyArea.addEventListener('click', e => {
   const renameCubeId = e.target.closest('[data-rename-cube]')?.dataset.renameCube;
   const delCubeId    = e.target.closest('[data-del-cube]')?.dataset.delCube;
   const isNewCube    = e.target.closest('[data-new-cube]');
+  const typeBtn      = e.target.closest('[data-type-set]');
 
   if (incId) {
     const p = pack.items.find(p => p.gearId === incId);
@@ -686,10 +728,25 @@ packBodyArea.addEventListener('click', e => {
     pack.cubes.push({ name: name.trim() || `Cube ${pack.cubes.length + 1}` });
     savePack(trip);
   }
+  if (typeBtn) {
+    const p = pack.items.find(p => p.gearId === typeBtn.dataset.typeSet);
+    if (p) { p.type = typeBtn.dataset.type; savePack(trip); }
+  }
   const isReset = e.target.closest('[data-reset-checklist]');
   if (isReset) {
     pack.items.forEach(p => { p.checked = false; });
     savePack(trip);
+  }
+  if (e.target.closest('[data-weight-chart]')) {
+    const byCategory = {};
+    pack.items.forEach(p => {
+      const g = gear.find(g => g.id === p.gearId);
+      if (!g?.weight) return;
+      const cat = g.category || 'Uncategorized';
+      byCategory[cat] = (byCategory[cat] || 0) + g.weight * p.qty;
+    });
+    weightChartContent.innerHTML = buildWeightChart(byCategory);
+    weightChartPopup.classList.remove('hidden');
   }
 });
 
@@ -698,15 +755,6 @@ packBodyArea.addEventListener('change', e => {
   if (!trip) return;
   const pack = trip.packs[currentPackIdx];
   if (!pack) return;
-
-  const assignEl = e.target.closest('[data-cube-assign]');
-  if (assignEl) {
-    const p = pack.items.find(p => p.gearId === assignEl.dataset.cubeAssign);
-    if (p) {
-      p.cubeId = assignEl.value || null;
-      savePack(trip);
-    }
-  }
 
   const checkEl = e.target.closest('[data-check]');
   if (checkEl) {
@@ -718,6 +766,51 @@ packBodyArea.addEventListener('change', e => {
   }
 });
 
+// ── Drag-and-drop cube assignment ─────────────────────────────────────────────
+
+packBodyArea.addEventListener('dragstart', e => {
+  const item = e.target.closest('.pack-item[draggable]');
+  if (!item) return;
+  e.dataTransfer.setData('text/plain', item.dataset.dragId);
+  e.dataTransfer.effectAllowed = 'move';
+  item.classList.add('dragging');
+});
+
+packBodyArea.addEventListener('dragend', e => {
+  packBodyArea.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  packBodyArea.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+});
+
+packBodyArea.addEventListener('dragover', e => {
+  const zone = e.target.closest('[data-drop-zone]');
+  if (!zone) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  packBodyArea.querySelectorAll('.drag-over').forEach(el => el !== zone && el.classList.remove('drag-over'));
+  zone.classList.add('drag-over');
+});
+
+packBodyArea.addEventListener('dragleave', e => {
+  const zone = e.target.closest('[data-drop-zone]');
+  if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+});
+
+packBodyArea.addEventListener('drop', e => {
+  e.preventDefault();
+  const zone = e.target.closest('[data-drop-zone]');
+  if (!zone) return;
+  zone.classList.remove('drag-over');
+  const gearId = e.dataTransfer.getData('text/plain');
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const pack = trip.packs[currentPackIdx];
+  if (!pack) return;
+  const p = pack.items.find(p => p.gearId === gearId);
+  if (!p) return;
+  p.cubeId = zone.dataset.dropZone === 'ungrouped' ? null : zone.dataset.dropZone;
+  savePack(trip);
+});
+
 function renderPicker() {
   const trip = trips.find(t => t.id === currentTripId);
   if (!trip) return;
@@ -727,20 +820,36 @@ function renderPicker() {
   );
   const pack = trip.packs[currentPackIdx];
   const inPack = new Set((pack?.items || []).map(p => p.gearId));
-  pickerList.innerHTML = filtered.map(g => {
-    const already = inPack.has(g.id);
+
+  const categories = [...new Set(filtered.map(g => g.category || 'Uncategorized'))].sort();
+
+  if (!filtered.length) {
+    pickerList.innerHTML = '<li style="padding:0.5rem;color:var(--text-muted);font-size:0.85rem">No gear found.</li>';
+    return;
+  }
+
+  pickerList.innerHTML = categories.map(cat => {
+    const items = filtered.filter(g => (g.category || 'Uncategorized') === cat);
     return `
-      <li class="picker-item">
-        <div class="picker-item-name">${esc(g.name)}</div>
-        <div class="picker-item-meta">${[g.brand, g.category, g.weight != null ? `${g.weight}g` : null].filter(Boolean).join(' · ') || ''}</div>
-        <button class="picker-item-add ${already ? 'in-pack' : ''}"
-                data-add="${g.id}" ${already ? 'disabled' : ''}>
-          ${already ? 'Added' : '+ Add'}
-        </button>
+      <li class="picker-category-group">
+        <div class="picker-category-label">${esc(cat)}</div>
+        <ul class="picker-category-items">
+          ${items.map(g => {
+            const already = inPack.has(g.id);
+            const meta = [g.brand, g.weight != null ? `${g.weight}g` : null].filter(Boolean).join(' · ');
+            return `
+              <li class="picker-item">
+                <div class="picker-item-name">${esc(g.name)}</div>
+                ${meta ? `<div class="picker-item-meta">${meta}</div>` : ''}
+                <button class="picker-item-add ${already ? 'in-pack' : ''}"
+                        data-add="${g.id}" ${already ? 'disabled' : ''}>
+                  ${already ? '✓' : '+'}
+                </button>
+              </li>`;
+          }).join('')}
+        </ul>
       </li>`;
   }).join('');
-  if (!filtered.length)
-    pickerList.innerHTML = '<li style="padding:0.5rem;color:var(--text-muted);font-size:0.85rem">No gear found.</li>';
 }
 
 pickerList.addEventListener('click', e => {
@@ -867,15 +976,15 @@ function renderCatalog() {
       </div>
       <table class="gear-table">
         <thead>
-          <tr><th>Name</th><th>Brand</th><th>Weight (g)</th><th>Notes</th><th></th></tr>
+          <tr><th>Name</th><th></th></tr>
         </thead>
         <tbody>
           ${items.map(c => `
             <tr>
-              <td><strong>${esc(c.name)}</strong></td>
-              <td>${esc(c.brand) || '—'}</td>
-              <td>${c.weight != null ? c.weight : '—'}</td>
-              <td>${c.notes ? `<button class="note-icon-btn" data-note="${esc(c.notes)}" title="View notes">ℹ</button>` : '—'}</td>
+              <td>
+                <strong ${c.notes ? `class="item-name-link" data-note="${esc(c.notes)}" title="Click to view notes"` : ''}>${esc(c.name)}</strong>
+                ${(c.brand || c.weight != null) ? `<div class="item-brand">${[c.brand, c.weight != null ? `${c.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
+              </td>
               <td class="col-actions">
                 <button class="btn-add-from-catalog" data-catalog-id="${c.id}">+ My Gear</button>
                 ${currentIsAdmin ? `<button data-catalog-edit="${c._id ?? c.id}">Edit</button><button data-catalog-delete="${c._id ?? c.id}" class="del">Delete</button>` : ''}
