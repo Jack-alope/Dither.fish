@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 100" width="720" height="100">
+  
+  <g>
+    <circle cx="50" cy="50" r="40" fill="#1a1a1a"></circle>
+    <line x1="50" y1="6" x2="50" y2="14" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"></line>
+    <path d="M22 50 Q32 32 54 34 Q70 36 74 50 L84 38 L84 62 L74 50 Q70 64 54 66 Q32 68 22 50 Z" fill="#f6f1e7"></path>
+    <circle cx="34" cy="46" r="3" fill="#5a8f47"></circle>
+  </g>
+  
+  <text x="110" y="80" font-family="&#39;JetBrains Mono&#39;, ui-monospace, monospace" font-size="100" fill="#1a1a1a" font-weight="500" letter-spacing="0">dither_fish</text>
+</svg>

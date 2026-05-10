@@ -4,9 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Dither.fish</title>
-  <link rel="icon" type="image/x-icon" href="img/dither_fish.ico" />
+  <link rel="icon" type="image/svg+xml" href="/favicons/icon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicons/favicon-180.png" />
   <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/img/dither_fish.png" />
   <meta name="theme-color" content="#2d6a4f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -18,7 +20,9 @@
   <!-- ───── AUTH SCREEN ───── -->
   <div id="auth-screen">
     <div class="auth-card">
-      <div class="auth-logo">Dither.fish</div>
+      <div class="auth-logo">
+        <img src="/favicons/wordmark-horizontal.svg" alt="Dither.fish" class="auth-wordmark" />
+      </div>
       <div class="auth-tabs">
         <button class="auth-tab active" data-tab="login">Sign in</button>
         <button class="auth-tab" data-tab="register">Create account</button>
@@ -46,8 +50,7 @@
     <header>
       <div class="header-inner">
         <span class="logo">
-          <img src="img/dither_fish.png" alt="Dither.fish" class="logo-img" />
-          <span class="logo-text">Dither.fish</span>
+          <img src="/favicons/icon.svg" alt="Dither.fish" class="logo-img" />
         </span>
         <nav>
           <button class="nav-btn active" data-view="gear">Gear Locker</button>
@@ -78,6 +81,16 @@
 
         <div id="gear-container"></div>
         <p class="empty-msg" id="gear-empty">No items yet — add your first piece of gear above.</p>
+
+        <!-- Bundles -->
+        <div class="bundles-section">
+          <div class="view-header" style="margin-top:2rem">
+            <h2>Bundles</h2>
+            <button class="btn-primary" id="btn-new-bundle">+ New Bundle</button>
+          </div>
+          <div id="bundle-container"></div>
+          <p class="empty-msg" id="bundles-empty">No bundles yet — create one to group your gear.</p>
+        </div>
       </section>
 
       <!-- ───── TRIPS VIEW ───── -->
@@ -101,6 +114,7 @@
             </div>
           </div>
           <p class="trip-meta" id="trip-detail-meta"></p>
+          <p class="trip-detail-notes hidden" id="trip-detail-notes"></p>
 
           <div class="pack-layout">
             <div class="pack-column">
@@ -108,6 +122,7 @@
               <div id="pack-body-area"></div>
             </div>
             <div class="gear-picker-column">
+              <div id="picker-bundles-section"></div>
               <h3>Add from Gear Locker</h3>
               <input type="text" id="picker-search" placeholder="Search gear…" />
               <ul class="picker-list" id="picker-list"></ul>
@@ -158,6 +173,8 @@
       <h3 id="modal-item-title">Add Item</h3>
       <form id="form-item" autocomplete="off">
         <label>Name <input type="text" name="name" required /></label>
+        <label>Brand <input type="text" name="brand" list="brand-list" /></label>
+        <datalist id="brand-list"></datalist>
         <label>Category <input type="text" name="category" list="category-list" /></label>
         <datalist id="category-list"></datalist>
         <label>Weight (g) <input type="number" name="weight" min="0" step="0.1" /></label>
@@ -224,6 +241,10 @@
   <!-- Notes popup -->
   <div id="note-popup" class="note-popup hidden">
     <button id="note-popup-close" class="note-popup-close" aria-label="Close">✕</button>
+    <div id="note-popup-header" class="note-popup-header">
+      <div id="note-popup-name" class="note-popup-name"></div>
+      <div id="note-popup-meta" class="note-popup-meta"></div>
+    </div>
     <p id="note-popup-text"></p>
   </div>
 

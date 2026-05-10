@@ -12,10 +12,24 @@ const cubeSchema = new mongoose.Schema({
   name: { type: String, default: 'Cube', trim: true },
 });
 
+const bundleItemTypeSchema = new mongoose.Schema({
+  gearId: { type: String },
+  type:   { type: String, enum: ['base', 'worn', 'consumable'], default: 'base' },
+}, { _id: false });
+
+const bundleRefSchema = new mongoose.Schema({
+  bundleId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Bundle', required: true },
+  expanded:     { type: Boolean, default: false },
+  checkedItems: { type: [String], default: [] },
+  itemTypes:    { type: [bundleItemTypeSchema], default: [] },
+  cubeId:       { type: String, default: null },
+}, { _id: false });
+
 const packSchema = new mongoose.Schema({
-  name:  { type: String, default: 'Pack', trim: true },
-  cubes: { type: [cubeSchema], default: [] },
-  items: { type: [packItemSchema], default: [] },
+  name:       { type: String, default: 'Pack', trim: true },
+  cubes:      { type: [cubeSchema], default: [] },
+  items:      { type: [packItemSchema], default: [] },
+  bundleRefs: { type: [bundleRefSchema], default: [] },
 });
 
 const tripSchema = new mongoose.Schema({

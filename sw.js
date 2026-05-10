@@ -1,13 +1,18 @@
-const CACHE = 'dither-v4';
+const CACHE = 'dither-v5';
 const STATIC = [
   '/',
   '/app.js',
   '/style.css',
   '/manifest.json',
-  '/img/dither_fish.png',
-  '/img/dither_fish.ico',
-  '/img/dither_fish_192.png',
-  '/img/dither_fish_512.png',
+  '/favicons/icon.svg',
+  '/favicons/wordmark-horizontal.svg',
+  '/favicons/favicon-32.png',
+  '/favicons/favicon-16.png',
+  '/favicons/favicon-180.png',
+  '/favicons/favicon-192.png',
+  '/favicons/favicon-512.png',
+  '/favicons/maskable-192.png',
+  '/favicons/maskable-512.png',
 ];
 
 self.addEventListener('install', e => {
