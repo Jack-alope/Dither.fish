@@ -531,6 +531,9 @@ function renderTripDetail() {
   document.getElementById('trip-detail-name').textContent = trip.name;
   const meta = [trip.destination, formatDateRange(trip.startDate, trip.endDate)].filter(Boolean).join(' · ');
   document.getElementById('trip-detail-meta').textContent = meta;
+  const notesEl = document.getElementById('trip-detail-notes');
+  notesEl.textContent = trip.notes || '';
+  notesEl.classList.toggle('hidden', !trip.notes);
   const packs = trip.packs || [];
   if (currentPackIdx >= packs.length) currentPackIdx = Math.max(0, packs.length - 1);
   renderPackSection(trip);
