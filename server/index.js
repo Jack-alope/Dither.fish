@@ -37,6 +37,7 @@ app.use('/api/auth',    require('./routes/auth'));
 app.use('/api/gear',    require('./routes/gear'));
 app.use('/api/trips',   require('./routes/trips'));
 app.use('/api/catalog', require('./routes/catalog'));
+app.use('/api/bundles', require('./routes/bundles'));
 
 // Serve frontend
 app.use(express.static(path.join(__dirname, '..')));

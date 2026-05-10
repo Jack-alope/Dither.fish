@@ -78,6 +78,16 @@
 
         <div id="gear-container"></div>
         <p class="empty-msg" id="gear-empty">No items yet — add your first piece of gear above.</p>
+
+        <!-- Bundles -->
+        <div class="bundles-section">
+          <div class="view-header" style="margin-top:2rem">
+            <h2>Bundles</h2>
+            <button class="btn-primary" id="btn-new-bundle">+ New Bundle</button>
+          </div>
+          <div id="bundle-container"></div>
+          <p class="empty-msg" id="bundles-empty">No bundles yet — create one to group your gear.</p>
+        </div>
       </section>
 
       <!-- ───── TRIPS VIEW ───── -->
@@ -109,6 +119,7 @@
               <div id="pack-body-area"></div>
             </div>
             <div class="gear-picker-column">
+              <div id="picker-bundles-section"></div>
               <h3>Add from Gear Locker</h3>
               <input type="text" id="picker-search" placeholder="Search gear…" />
               <ul class="picker-list" id="picker-list"></ul>

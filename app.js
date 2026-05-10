@@ -7,6 +7,7 @@ let currentIsAdmin  = localStorage.getItem('lp_isAdmin') === 'true';
 let gear    = [];
 let trips   = [];
 let catalog = [];
+let bundles = [];
 let currentView    = 'gear';
 let currentTripId  = null;
 let currentPackIdx = 0;
@@ -50,22 +51,32 @@ function showAuth() {
 }
 
 async function loadAll() {
-  const [gearData, tripsData, catalogData] = await Promise.all([
+  const [gearData, tripsData, catalogData, bundlesData] = await Promise.all([
     api('/gear'),
     api('/trips'),
     api('/catalog'),
+    api('/bundles'),
   ]);
-  if (!gearData || !tripsData || !catalogData) return;
+  if (!gearData || !tripsData || !catalogData || !bundlesData) return;
   gear    = gearData.map(normalizeGear);
   trips   = tripsData.map(normalizeTrip);
   catalog = catalogData.map(c => ({ ...c, id: c._id ?? c.id }));
+  bundles = bundlesData.map(normalizeBundle);
   renderGear();
+  renderBundles();
   renderTripList();
   if (currentIsAdmin) loadPendingCount();
 }
 
 // Normalise Mongo _id -> id for the frontend
-function normalizeGear(g)  { return { ...g, id: g._id ?? g.id }; }
+function normalizeGear(g)   { return { ...g, id: g._id ?? g.id }; }
+function normalizeBundle(b) {
+  return {
+    ...b,
+    id: String(b._id ?? b.id),
+    items: (b.items || []).map(i => ({ gearId: String(i.gearId), qty: i.qty ?? 1 })),
+  };
+}
 function normalizeTrip(t)  {
   const base = { ...t, id: t._id ?? t.id };
   if (!base.packs || base.packs.length === 0) {
@@ -237,7 +248,7 @@ function switchView(view) {
   currentView = view;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === `view-${view}`));
-  if (view === 'gear')    renderGear();
+  if (view === 'gear')    { renderGear(); renderBundles(); }
   if (view === 'trips')   { showTripList(); renderTripList(); }
   if (view === 'catalog') renderCatalog();
 }
@@ -407,6 +418,142 @@ async function deleteItem(id) {
     });
     renderGear();
     if (currentTripId) renderTripDetail();
+  } catch (err) { alert(err.message); }
+}
+
+// ── Bundles ──────────────────────────────────────────────────────────────────
+
+const bundleContainer = document.getElementById('bundle-container');
+const bundlesEmpty    = document.getElementById('bundles-empty');
+
+document.getElementById('btn-new-bundle').addEventListener('click', async () => {
+  const name = prompt('Bundle name:');
+  if (!name?.trim()) return;
+  try {
+    const b = normalizeBundle(await api('/bundles', { method: 'POST', body: { name: name.trim() } }));
+    bundles.push(b);
+    renderBundles();
+  } catch (err) { alert(err.message); }
+});
+
+function renderBundles() {
+  bundlesEmpty.style.display    = bundles.length ? 'none' : 'block';
+  bundleContainer.style.display = bundles.length ? '' : 'none';
+
+  bundleContainer.innerHTML = bundles.map(b => {
+    const resolved = b.items
+      .map(item => ({ item, g: gear.find(g => g.id === item.gearId) }))
+      .filter(x => x.g);
+    return `
+      <div class="bundle-block">
+        <div class="bundle-block-header">
+          <span class="bundle-block-title">${esc(b.name)}</span>
+          <span class="bundle-block-count">${resolved.length} item${resolved.length !== 1 ? 's' : ''}</span>
+          <div class="bundle-block-actions">
+            <button class="btn-link" data-rename-bundle="${b.id}">Rename</button>
+            <button class="bundle-del" data-delete-bundle="${b.id}" title="Delete bundle">×</button>
+          </div>
+        </div>
+        <ul class="bundle-item-list">
+          ${resolved.map(({ item, g }) => `
+            <li class="bundle-item">
+              <div class="bundle-item-info">
+                <span class="bundle-item-name">${esc(g.name)}</span>
+                ${(g.brand || g.weight != null) ? `<span class="bundle-item-meta">${[g.brand, g.weight != null ? g.weight + 'g' : null].filter(Boolean).join(' · ')}</span>` : ''}
+              </div>
+              <div class="pack-item-qty">
+                <button data-bqty-dec="${b.id}" data-bgear="${g.id}">−</button>
+                <span>${item.qty}</span>
+                <button data-bqty-inc="${b.id}" data-bgear="${g.id}">+</button>
+              </div>
+              <button class="pack-item-remove" data-bremove="${b.id}" data-bgear="${g.id}" title="Remove">✕</button>
+            </li>`).join('')}
+        </ul>
+        <div class="bundle-add-gear">
+          <input type="text" class="bundle-search" data-bundle-id="${b.id}" placeholder="Search gear to add…" autocomplete="off" />
+          <ul class="bundle-search-results" data-bundle-results="${b.id}"></ul>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+bundleContainer.addEventListener('click', async e => {
+  const renameId  = e.target.closest('[data-rename-bundle]')?.dataset.renameBundle;
+  const deleteId  = e.target.closest('[data-delete-bundle]')?.dataset.deleteBundle;
+  const incEl     = e.target.closest('[data-bqty-inc]');
+  const decEl     = e.target.closest('[data-bqty-dec]');
+  const removeEl  = e.target.closest('[data-bremove]');
+  const addEl     = e.target.closest('[data-badd]');
+
+  if (renameId) {
+    const b = bundles.find(b => b.id === renameId);
+    const name = prompt('Bundle name:', b?.name || '');
+    if (!name?.trim() || !b) return;
+    b.name = name.trim();
+    await saveBundle(b);
+  }
+  if (deleteId && confirm('Delete this bundle?')) {
+    try {
+      await api(`/bundles/${deleteId}`, { method: 'DELETE' });
+      bundles = bundles.filter(b => b.id !== deleteId);
+      renderBundles();
+    } catch (err) { alert(err.message); }
+  }
+  if (incEl) {
+    const b = bundles.find(b => b.id === incEl.dataset.bqtyInc);
+    const item = b?.items.find(i => i.gearId === incEl.dataset.bgear);
+    if (item) { item.qty++; await saveBundle(b); }
+  }
+  if (decEl) {
+    const b = bundles.find(b => b.id === decEl.dataset.bqtyDec);
+    const item = b?.items.find(i => i.gearId === decEl.dataset.bgear);
+    if (item) { item.qty = Math.max(1, item.qty - 1); await saveBundle(b); }
+  }
+  if (removeEl) {
+    const b = bundles.find(b => b.id === removeEl.dataset.bremove);
+    if (b) { b.items = b.items.filter(i => i.gearId !== removeEl.dataset.bgear); await saveBundle(b); }
+  }
+  if (addEl) {
+    const b = bundles.find(b => b.id === addEl.dataset.badd);
+    if (b && !b.items.find(i => i.gearId === addEl.dataset.bgear)) {
+      b.items.push({ gearId: addEl.dataset.bgear, qty: 1 });
+      await saveBundle(b);
+    }
+  }
+});
+
+bundleContainer.addEventListener('input', e => {
+  const input = e.target.closest('.bundle-search');
+  if (!input) return;
+  const bid     = input.dataset.bundleId;
+  const b       = bundles.find(b => b.id === bid);
+  const results = bundleContainer.querySelector(`[data-bundle-results="${bid}"]`);
+  if (!b || !results) return;
+  const q = input.value.toLowerCase().trim();
+  if (!q) { results.innerHTML = ''; return; }
+  const inBundle = new Set(b.items.map(i => i.gearId));
+  const matches  = gear
+    .filter(g => !inBundle.has(g.id) &&
+      (g.name.toLowerCase().includes(q) || (g.brand || '').toLowerCase().includes(q) || (g.category || '').toLowerCase().includes(q)))
+    .slice(0, 8);
+  results.innerHTML = matches.length
+    ? matches.map(g => `
+        <li class="bundle-result-item">
+          <div class="bundle-result-info">
+            <span class="bundle-result-name">${esc(g.name)}</span>
+            ${(g.brand || g.weight != null) ? `<span class="bundle-result-meta">${[g.brand, g.weight != null ? g.weight + 'g' : null].filter(Boolean).join(' · ')}</span>` : ''}
+          </div>
+          <button class="picker-item-add" data-badd="${bid}" data-bgear="${g.id}">+</button>
+        </li>`).join('')
+    : '<li style="padding:0.3rem 0.4rem;font-size:0.82rem;color:var(--text-muted)">No gear found.</li>';
+});
+
+async function saveBundle(b) {
+  try {
+    const updated = normalizeBundle(await api(`/bundles/${b.id}`, { method: 'PUT', body: { name: b.name, items: b.items } }));
+    const idx = bundles.findIndex(x => x.id === b.id);
+    if (idx >= 0) bundles[idx] = updated;
+    renderBundles();
   } catch (err) { alert(err.message); }
 }
 
@@ -825,9 +972,35 @@ packBodyArea.addEventListener('drop', e => {
   savePack(trip);
 });
 
+function renderPickerBundles() {
+  const section = document.getElementById('picker-bundles-section');
+  if (!section) return;
+  if (!bundles.length) { section.innerHTML = ''; return; }
+  const trip = trips.find(t => t.id === currentTripId);
+  const pack = trip?.packs[currentPackIdx];
+  const inPack = new Set((pack?.items || []).map(p => p.gearId));
+  section.innerHTML = `
+    <h3>Bundles</h3>
+    <ul class="picker-bundle-list">
+      ${bundles.map(b => {
+        const validItems = b.items.filter(i => gear.find(g => g.id === i.gearId));
+        return `
+          <li class="picker-bundle-item">
+            <div class="picker-bundle-info">
+              <span class="picker-bundle-name">${esc(b.name)}</span>
+              <span class="picker-bundle-count">${validItems.length} item${validItems.length !== 1 ? 's' : ''}</span>
+            </div>
+            <button class="picker-bundle-add" data-add-bundle="${b.id}">+ Add</button>
+          </li>`;
+      }).join('')}
+    </ul>
+    <div class="picker-section-divider"></div>`;
+}
+
 function renderPicker() {
   const trip = trips.find(t => t.id === currentTripId);
   if (!trip) return;
+  renderPickerBundles();
   const q = pickerSearch.value.toLowerCase();
   const filtered = gear.filter(g =>
     !q || g.name.toLowerCase().includes(q) || (g.category || '').toLowerCase().includes(q)
@@ -865,6 +1038,25 @@ function renderPicker() {
       </li>`;
   }).join('');
 }
+
+document.getElementById('picker-bundles-section').addEventListener('click', e => {
+  const addBundleEl = e.target.closest('[data-add-bundle]');
+  if (!addBundleEl) return;
+  const b = bundles.find(b => b.id === addBundleEl.dataset.addBundle);
+  if (!b) return;
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const pack = trip.packs[currentPackIdx];
+  if (!pack) return;
+  let changed = false;
+  b.items.forEach(({ gearId, qty }) => {
+    if (!pack.items.find(p => p.gearId === gearId)) {
+      pack.items.push({ gearId, qty });
+      changed = true;
+    }
+  });
+  if (changed) savePack(trip);
+});
 
 pickerList.addEventListener('click', e => {
   const addId = e.target.closest('[data-add]')?.dataset.add;
