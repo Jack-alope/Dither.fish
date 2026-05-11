@@ -15,15 +15,20 @@ let currentPackIdx = 0;
 // ── API helper ───────────────────────────────────────────────────────────────
 
 async function api(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    throw new Error("You're offline — connect to save changes");
+  }
   if (res.status === 401) { logout(); return null; }
   if (res.status === 403) return null;
   if (!res.ok) {
@@ -35,8 +40,16 @@ async function api(path, options = {}) {
 
 // ── Auth screens ─────────────────────────────────────────────────────────────
 
-const authScreen = document.getElementById('auth-screen');
-const appEl      = document.getElementById('app');
+const authScreen   = document.getElementById('auth-screen');
+const appEl        = document.getElementById('app');
+const offlineBanner = document.getElementById('offline-banner');
+
+function setOffline(offline) {
+  offlineBanner?.classList.toggle('hidden', !offline);
+}
+window.addEventListener('online',  () => { setOffline(false); loadAll(); });
+window.addEventListener('offline', () => setOffline(true));
+setOffline(!navigator.onLine);
 
 function showApp() {
   authScreen.classList.add('hidden');
@@ -51,21 +64,28 @@ function showAuth() {
 }
 
 async function loadAll() {
-  const [gearData, tripsData, catalogData, bundlesData] = await Promise.all([
-    api('/gear'),
-    api('/trips'),
-    api('/catalog'),
-    api('/bundles'),
-  ]);
-  if (!gearData || !tripsData || !catalogData || !bundlesData) return;
-  gear    = gearData.map(normalizeGear);
-  trips   = tripsData.map(normalizeTrip);
-  catalog = catalogData.map(c => ({ ...c, id: c._id ?? c.id }));
-  bundles = bundlesData.map(normalizeBundle);
-  renderGear();
-  renderBundles();
-  renderTripList();
-  if (currentIsAdmin) loadPendingCount();
+  try {
+    const [gearData, tripsData, catalogData, bundlesData] = await Promise.all([
+      api('/gear'),
+      api('/trips'),
+      api('/catalog'),
+      api('/bundles'),
+    ]);
+    if (!gearData || !tripsData || !catalogData || !bundlesData) return;
+    gear    = gearData.map(normalizeGear);
+    trips   = tripsData.map(normalizeTrip);
+    catalog = catalogData.map(c => ({ ...c, id: c._id ?? c.id }));
+    bundles = bundlesData.map(normalizeBundle);
+    renderGear();
+    renderBundles();
+    renderTripList();
+    if (currentIsAdmin) loadPendingCount();
+  } catch {
+    // Offline with no cache yet — show empty state gracefully
+    renderGear();
+    renderBundles();
+    renderTripList();
+  }
 }
 
 // Normalise Mongo _id -> id for the frontend
@@ -431,8 +451,9 @@ async function deleteItem(id) {
 
 // ── Bundles ──────────────────────────────────────────────────────────────────
 
-const bundleContainer = document.getElementById('bundle-container');
-const bundlesEmpty    = document.getElementById('bundles-empty');
+const bundleContainer  = document.getElementById('bundle-container');
+const bundlesEmpty     = document.getElementById('bundles-empty');
+const expandedBundles  = new Set();
 
 document.getElementById('btn-new-bundle').addEventListener('click', async () => {
   const name = prompt('Bundle name:');
@@ -452,16 +473,20 @@ function renderBundles() {
     const resolved = b.items
       .map(item => ({ item, g: gear.find(g => g.id === item.gearId) }))
       .filter(x => x.g);
+    const totalWeight = resolved.reduce((sum, { item, g }) => sum + (g.weight ?? 0) * item.qty, 0);
+    const exp = expandedBundles.has(b.id);
     return `
-      <div class="bundle-block">
-        <div class="bundle-block-header">
+      <div class="bundle-block${exp ? ' expanded' : ''}">
+        <div class="bundle-block-header" data-toggle-bundle="${b.id}">
+          <span class="bundle-chevron">${exp ? '▾' : '▸'}</span>
           <span class="bundle-block-title">${esc(b.name)}</span>
-          <span class="bundle-block-count">${resolved.length} item${resolved.length !== 1 ? 's' : ''}</span>
+          <span class="bundle-block-count">${resolved.length} item${resolved.length !== 1 ? 's' : ''}${totalWeight ? ` · ${formatWeight(totalWeight)}` : ''}</span>
           <div class="bundle-block-actions">
             <button class="btn-link" data-rename-bundle="${b.id}">Rename</button>
             <button class="bundle-del" data-delete-bundle="${b.id}" title="Delete bundle">×</button>
           </div>
         </div>
+        ${exp ? `
         <ul class="bundle-item-list">
           ${resolved.map(({ item, g }) => `
             <li class="bundle-item">
@@ -480,18 +505,27 @@ function renderBundles() {
         <div class="bundle-add-gear">
           <input type="text" class="bundle-search" data-bundle-id="${b.id}" placeholder="Search gear to add…" autocomplete="off" />
           <ul class="bundle-search-results" data-bundle-results="${b.id}"></ul>
-        </div>
+        </div>` : ''}
       </div>`;
   }).join('');
 }
 
 bundleContainer.addEventListener('click', async e => {
+  const toggleId  = !e.target.closest('[data-rename-bundle],[data-delete-bundle]')
+                      ? e.target.closest('[data-toggle-bundle]')?.dataset.toggleBundle
+                      : null;
   const renameId  = e.target.closest('[data-rename-bundle]')?.dataset.renameBundle;
   const deleteId  = e.target.closest('[data-delete-bundle]')?.dataset.deleteBundle;
   const incEl     = e.target.closest('[data-bqty-inc]');
   const decEl     = e.target.closest('[data-bqty-dec]');
   const removeEl  = e.target.closest('[data-bremove]');
   const addEl     = e.target.closest('[data-badd]');
+
+  if (toggleId) {
+    expandedBundles.has(toggleId) ? expandedBundles.delete(toggleId) : expandedBundles.add(toggleId);
+    renderBundles();
+    return;
+  }
 
   if (renameId) {
     const b = bundles.find(b => b.id === renameId);

@@ -1,4 +1,6 @@
-const CACHE = 'dither-v5';
+const CACHE     = 'dither-v7';
+const API_CACHE = 'dither-api-v7';
+
 const STATIC = [
   '/',
   '/app.js',
@@ -22,7 +24,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    Promise.all(keys.filter(k => k !== CACHE && k !== API_CACHE).map(k => caches.delete(k)))
   ));
   self.clients.claim();
 });
@@ -30,10 +32,36 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Always go network-first for API calls
-  if (url.pathname.startsWith('/api')) return;
+  // ── API calls ────────────────────────────────────────────────────────────────
+  if (url.pathname.startsWith('/api')) {
+    // GETs: network-first, fall back to last cached response when offline
+    if (e.request.method === 'GET') {
+      e.respondWith(
+        fetch(e.request.url, {
+          headers: Object.fromEntries(e.request.headers.entries()),
+        })
+          .then(res => {
+            if (res.ok) {
+              const clone = res.clone();
+              caches.open(API_CACHE).then(c => c.put(e.request.url, clone));
+            }
+            return res;
+          })
+          .catch(async () => {
+            const cached = await caches.open(API_CACHE).then(c => c.match(e.request.url));
+            // Return cached data, or an empty array so the app renders gracefully
+            return cached || new Response('[]', {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          })
+      );
+    }
+    // Mutations (POST/PUT/DELETE): pass straight to network — fail naturally when offline
+    return;
+  }
 
-  // Cache-first for static assets
+  // ── Static assets: cache-first ───────────────────────────────────────────────
   e.respondWith(
     caches.match(e.request).then(cached => {
       const fresh = fetch(e.request).then(res => {

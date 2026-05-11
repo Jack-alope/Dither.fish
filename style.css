@@ -98,6 +98,24 @@ body {
   padding: 0.45rem 0.75rem;
 }
 
+/* ── Offline banner ── */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: #b45309;
+  color: #fff;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.45rem 1rem;
+  letter-spacing: 0.01em;
+}
+.offline-banner:not(.hidden) ~ #auth-screen,
+.offline-banner:not(.hidden) ~ #app { padding-top: 2rem; }
+
 /* ── Header user area ── */
 header {
   background: var(--accent);
@@ -449,7 +467,15 @@ main {
   background: var(--accent-light);
   border-bottom: 1px solid var(--border);
   border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer;
+  user-select: none;
 }
+.bundle-block:not(.expanded) .bundle-block-header {
+  border-bottom: none;
+  border-radius: var(--radius);
+}
+.bundle-block-header:hover { background: var(--accent-hover-light, color-mix(in srgb, var(--accent-light) 80%, var(--accent) 20%)); }
+.bundle-chevron { font-size: 0.72rem; color: var(--accent); flex-shrink: 0; }
 .bundle-block-title {
   font-size: 0.82rem;
   font-weight: 700;
