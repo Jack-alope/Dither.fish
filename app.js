@@ -54,7 +54,13 @@ setOffline(!navigator.onLine);
 function showApp() {
   authScreen.classList.add('hidden');
   appEl.classList.remove('hidden');
-  document.getElementById('header-username').textContent = currentUsername;
+  const uname = currentUsername || '';
+  document.getElementById('header-username').textContent = uname;
+  document.getElementById('user-dropdown-name').textContent = uname;
+  document.getElementById('user-avatar-circle').textContent = uname.charAt(0).toUpperCase();
+  const roleEl = document.getElementById('user-dropdown-role');
+  if (currentIsAdmin) roleEl.classList.remove('hidden');
+  else roleEl.classList.add('hidden');
   loadAll();
 }
 
@@ -204,6 +210,32 @@ function logout() {
   showAuth();
 }
 document.getElementById('btn-logout').addEventListener('click', logout);
+
+// ── User menu dropdown ───────────────────────────────────────────────────────
+const userMenuBtn      = document.getElementById('btn-user-menu');
+const userDropdown     = document.getElementById('user-dropdown');
+
+function toggleUserMenu(e) {
+  e.stopPropagation();
+  const open = !userDropdown.classList.contains('hidden');
+  userDropdown.classList.toggle('hidden', open);
+  userMenuBtn.setAttribute('aria-expanded', String(!open));
+}
+
+function closeUserMenu() {
+  userDropdown.classList.add('hidden');
+  userMenuBtn.setAttribute('aria-expanded', 'false');
+}
+
+userMenuBtn.addEventListener('click', toggleUserMenu);
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('user-menu').contains(e.target)) closeUserMenu();
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeUserMenu();
+});
 
 // ── Weight chart popup ───────────────────────────────────────────────────────
 const weightChartPopup   = document.getElementById('weight-chart-popup');

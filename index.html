@@ -63,8 +63,30 @@
           <button class="nav-btn" data-view="catalog">Catalog</button>
         </nav>
         <div class="header-user">
-          <span id="header-username"></span>
-          <button class="btn-logout" id="btn-logout">Sign out</button>
+          <div class="user-menu" id="user-menu">
+            <button class="user-menu-btn" id="btn-user-menu" aria-haspopup="true" aria-expanded="false">
+              <span id="header-username"></span>
+              <svg class="user-menu-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="user-dropdown hidden" id="user-dropdown" role="menu">
+              <div class="user-dropdown-info">
+                <div class="user-avatar-circle" id="user-avatar-circle"></div>
+                <div>
+                  <div class="user-dropdown-name" id="user-dropdown-name"></div>
+                  <div class="user-dropdown-role hidden" id="user-dropdown-role">Admin</div>
+                </div>
+              </div>
+              <div class="user-dropdown-divider"></div>
+              <button class="user-dropdown-item user-dropdown-signout" id="btn-logout" role="menuitem">
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+                  <path d="M5 2H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3M10 10l3-3-3-3M13 7.5H5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Sign out
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
