@@ -17,6 +17,7 @@ struct PackView: View {
     let packIndex: Int
 
     @State private var showAddGearSheet = false
+    @State private var renamingCube: Cube? = nil
 
     // Always read live from state so changes are immediately reflected
     var trip: Trip? { state.trips.first { $0.id == tripId } }
@@ -115,9 +116,16 @@ struct PackView: View {
                                         .textCase(nil)
                                 }
                                 Spacer()
-                                Button(role: .destructive, action: { removeCube(cube) }) {
-                                    Image(systemName: "trash").font(.caption2)
-                                }.tint(.red)
+                                if !(trip?.archived ?? false) {
+                                    Button(action: { renamingCube = cube }) {
+                                        Image(systemName: "pencil").font(.caption2)
+                                    }
+                                    .tint(.secondary)
+                                    .padding(.trailing, 6)
+                                    Button(role: .destructive, action: { removeCube(cube) }) {
+                                        Image(systemName: "trash").font(.caption2)
+                                    }.tint(.red)
+                                }
                             }
                         ) {
                             ForEach(cubeItems, id: \.gearId) { item in
@@ -184,6 +192,11 @@ struct PackView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .sheet(item: $renamingCube) { cube in
+                    RenameCubeSheet(currentName: cube.name) { newName in
+                        renameCube(cube, name: newName)
+                    }
+                }
                 .safeAreaInset(edge: .bottom) {
                     if !(trip?.archived ?? false) {
                         Button(action: { showAddGearSheet = true }) {
@@ -242,6 +255,15 @@ struct PackView: View {
         }
     }
 
+    private func renameCube(_ cube: Cube, name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        withPack { pack in
+            guard let idx = pack.cubes.firstIndex(where: { $0.id == cube.id }) else { return }
+            pack.cubes[idx].name = trimmed
+        }
+    }
+
     private func removeCube(_ cube: Cube) {
         withPack { pack in
             pack.cubes.removeAll { $0.id == cube.id }
@@ -268,6 +290,44 @@ struct PackView: View {
     }
 }
 
+
+// MARK: - Rename Cube Sheet
+struct RenameCubeSheet: View {
+    let currentName: String
+    let onRename: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Cube name", text: $name)
+                    .onSubmit { commit() }
+            }
+            .navigationTitle("Rename Cube")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { commit() }
+                        .fontWeight(.semibold)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.height(180)])
+        .onAppear { name = currentName }
+    }
+
+    private func commit() {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        onRename(trimmed)
+        dismiss()
+    }
+}
 
 // MARK: - Weight Summary Bar
 struct WeightSummaryBar: View {
