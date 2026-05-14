@@ -100,7 +100,7 @@ class AppState: ObservableObject {
     func syncPendingOps() async {
         guard isOnline, !pendingOps.isEmpty else { return }
 
-        var remaining = pendingOps  // snapshot
+        let remaining = pendingOps  // snapshot
         var doneIds = Set<String>()
 
         for op in remaining {
