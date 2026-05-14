@@ -23,8 +23,8 @@ struct GearItem: Codable, Identifiable {
 // MARK: - Bundle
 struct GearBundle: Codable, Identifiable {
     let _id: String
-    let name: String
-    let items: [BundleItem]
+    var name: String
+    var items: [BundleItem]
 
     var id: String { _id }
 
@@ -34,8 +34,8 @@ struct GearBundle: Codable, Identifiable {
 }
 
 struct BundleItem: Codable {
-    let gearId: String
-    let qty: Int
+    var gearId: String
+    var qty: Int
 }
 
 // MARK: - Trips
@@ -72,6 +72,22 @@ struct Trip: Codable, Identifiable {
         archived    = (try? c.decodeIfPresent(Bool.self, forKey: .archived))      ?? false
         frozenGear    = try? c.decodeIfPresent([GearItem].self, forKey: .frozenGear)
         frozenBundles = try? c.decodeIfPresent([GearBundle].self, forKey: .frozenBundles)
+    }
+
+    /// Direct initialiser — used when creating trips offline with a temp ID.
+    init(_id: String, name: String, destination: String = "", startDate: String = "",
+         endDate: String = "", notes: String = "", packs: [Pack] = [],
+         archived: Bool = false, frozenGear: [GearItem]? = nil, frozenBundles: [GearBundle]? = nil) {
+        self._id          = _id
+        self.name         = name
+        self.destination  = destination
+        self.startDate    = startDate
+        self.endDate      = endDate
+        self.notes        = notes
+        self.packs        = packs
+        self.archived     = archived
+        self.frozenGear   = frozenGear
+        self.frozenBundles = frozenBundles
     }
 }
 
@@ -190,7 +206,7 @@ struct OkResult: Codable {
 }
 
 // MARK: - New item request bodies (for POST/PUT)
-struct GearItemRequest: Encodable {
+struct GearItemRequest: Codable {
     let name: String
     let brand: String
     let category: String
@@ -199,12 +215,12 @@ struct GearItemRequest: Encodable {
     let notes: String
 }
 
-struct BundleRequest: Encodable {
+struct BundleRequest: Codable {
     let name: String
     let items: [BundleItem]
 }
 
-struct TripRequest: Encodable {
+struct TripRequest: Codable {
     let name: String
     let destination: String
     let startDate: String
