@@ -273,22 +273,39 @@ class AppState: ObservableObject {
         pendingOps = pendingOps.map { op in
             switch op.type {
             case .updateTrip:
-                guard var p = try? decodePayload(UpdateTripPayload.self, from: op.payload) else { return op }
-                var changed = false
-                for pi in p.req.packs.indices {
-                    for ii in p.req.packs[pi].items.indices where p.req.packs[pi].items[ii].gearId == tempId {
-                        p.req.packs[pi].items[ii].gearId = realId
-                        changed = true
-                    }
+                guard let p = try? decodePayload(UpdateTripPayload.self, from: op.payload) else { return op }
+                let patchedPacks = p.req.packs.map { pack in
+                    Pack(name: pack.name, cubes: pack.cubes,
+                         items: pack.items.map { item in
+                             item.gearId == tempId
+                                 ? PackItem(gearId: realId, qty: item.qty, cubeId: item.cubeId, checked: item.checked, type: item.type)
+                                 : item
+                         },
+                         bundleRefs: pack.bundleRefs.map { ref in
+                             BundleRef(bundleId: ref.bundleId, expanded: ref.expanded,
+                                       checkedItems: ref.checkedItems.map { $0 == tempId ? realId : $0 },
+                                       itemTypes: ref.itemTypes.map { bt in
+                                           bt.gearId == tempId ? BundleItemType(gearId: realId, type: bt.type) : bt
+                                       },
+                                       cubeId: ref.cubeId)
+                         })
                 }
-                if changed, let data = try? JSONEncoder().encode(p) { return op.withPayload(data) }
+                let patchedReq = TripRequest(name: p.req.name, destination: p.req.destination,
+                                             startDate: p.req.startDate, endDate: p.req.endDate,
+                                             notes: p.req.notes, packs: patchedPacks,
+                                             archived: p.req.archived,
+                                             frozenGear: p.req.frozenGear, frozenBundles: p.req.frozenBundles)
+                let patched = UpdateTripPayload(id: p.id, req: patchedReq)
+                if let data = try? JSONEncoder().encode(patched) { return op.withPayload(data) }
+
             case .updateBundle:
-                guard var p = try? decodePayload(UpdateBundlePayload.self, from: op.payload) else { return op }
-                let patched = p.req.items.map { BundleItem(gearId: $0.gearId == tempId ? realId : $0.gearId, qty: $0.qty) }
-                if patched.map(\.gearId) != p.req.items.map(\.gearId) {
-                    p = UpdateBundlePayload(id: p.id, req: BundleRequest(name: p.req.name, items: patched))
-                    if let data = try? JSONEncoder().encode(p) { return op.withPayload(data) }
+                guard let p = try? decodePayload(UpdateBundlePayload.self, from: op.payload) else { return op }
+                let patchedItems = p.req.items.map { BundleItem(gearId: $0.gearId == tempId ? realId : $0.gearId, qty: $0.qty) }
+                if patchedItems.map(\.gearId) != p.req.items.map(\.gearId) {
+                    let patched = UpdateBundlePayload(id: p.id, req: BundleRequest(name: p.req.name, items: patchedItems))
+                    if let data = try? JSONEncoder().encode(patched) { return op.withPayload(data) }
                 }
+
             default:
                 break
             }
@@ -299,22 +316,44 @@ class AppState: ObservableObject {
     private func patchQueue(bundleTempId tempId: String, realId: String) {
         pendingOps = pendingOps.map { op in
             guard op.type == .updateTrip,
-                  var p = try? decodePayload(UpdateTripPayload.self, from: op.payload) else { return op }
-            var changed = false
-            for pi in p.req.packs.indices {
-                for ri in p.req.packs[pi].bundleRefs.indices where p.req.packs[pi].bundleRefs[ri].bundleId == tempId {
-                    p.req.packs[pi].bundleRefs[ri].bundleId = realId
-                    changed = true
-                }
+                  let p = try? decodePayload(UpdateTripPayload.self, from: op.payload) else { return op }
+            let patchedPacks = p.req.packs.map { pack in
+                Pack(name: pack.name, cubes: pack.cubes, items: pack.items,
+                     bundleRefs: pack.bundleRefs.map { ref in
+                         ref.bundleId == tempId
+                             ? BundleRef(bundleId: realId, expanded: ref.expanded,
+                                         checkedItems: ref.checkedItems, itemTypes: ref.itemTypes, cubeId: ref.cubeId)
+                             : ref
+                     })
             }
-            if changed, let data = try? JSONEncoder().encode(p) { return op.withPayload(data) }
+            let patchedReq = TripRequest(name: p.req.name, destination: p.req.destination,
+                                         startDate: p.req.startDate, endDate: p.req.endDate,
+                                         notes: p.req.notes, packs: patchedPacks,
+                                         archived: p.req.archived,
+                                         frozenGear: p.req.frozenGear, frozenBundles: p.req.frozenBundles)
+            let patched = UpdateTripPayload(id: p.id, req: patchedReq)
+            if let data = try? JSONEncoder().encode(patched) { return op.withPayload(data) }
             return op
         }
     }
 
     private func patchQueue(tripTempId tempId: String, realId: String) {
-        // No other queued ops reference trip IDs — nothing to patch.
-        _ = tempId; _ = realId
+        pendingOps = pendingOps.map { op in
+            guard op.type == .updateTrip || op.type == .deleteTrip else { return op }
+            if op.type == .updateTrip,
+               let p = try? decodePayload(UpdateTripPayload.self, from: op.payload),
+               p.id == tempId {
+                let patched = UpdateTripPayload(id: realId, req: p.req)
+                if let data = try? JSONEncoder().encode(patched) { return op.withPayload(data) }
+            }
+            if op.type == .deleteTrip,
+               let p = try? decodePayload(DeletePayload.self, from: op.payload),
+               p.id == tempId {
+                let patched = DeletePayload(id: realId)
+                if let data = try? JSONEncoder().encode(patched) { return op.withPayload(data) }
+            }
+            return op
+        }
     }
 
     // MARK: - Network error detection

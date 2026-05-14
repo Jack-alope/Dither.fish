@@ -34,6 +34,36 @@ struct SettingsView: View {
                     .padding(.vertical, 6)
                 }
 
+                // ── Sync ───────────────────────────────────────────────────
+                Section(header: Text("Sync").ditherSectionHeader()) {
+                    LabeledContent("Status") {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(state.isOnline ? Color.ditherGreen : Color.orange)
+                                .frame(width: 8, height: 8)
+                            Text(state.isOnline ? "Online" : "Offline")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    if state.pendingOpCount > 0 {
+                        HStack {
+                            Label("\(state.pendingOpCount) change\(state.pendingOpCount == 1 ? "" : "s") waiting to sync",
+                                  systemImage: "arrow.triangle.2.circlepath")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            if state.isOnline {
+                                Button("Sync Now") {
+                                    Task { await state.syncPendingOps() }
+                                }
+                                .font(.subheadline)
+                                .tint(.ditherGreen)
+                            }
+                        }
+                    }
+                }
+
                 // ── App ────────────────────────────────────────────────────
                 Section(header: Text("App").ditherSectionHeader()) {
                     LabeledContent("Version") {
