@@ -234,7 +234,34 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeUserMenu();
+  if (e.key === 'Escape') { closeUserMenu(); closeSettings(); }
+});
+
+// ── Settings modal ───────────────────────────────────────────────────────────
+const settingsOverlay = document.getElementById('settings-overlay');
+
+function openSettings() {
+  closeUserMenu();
+  const uname = currentUsername || '';
+  document.getElementById('settings-avatar').textContent = uname.charAt(0).toUpperCase();
+  document.getElementById('settings-username-display').textContent = uname;
+  const badge = document.getElementById('settings-admin-badge');
+  if (currentIsAdmin) badge.classList.remove('hidden');
+  else badge.classList.add('hidden');
+  settingsOverlay.classList.remove('hidden');
+  document.getElementById('btn-close-settings').focus();
+}
+
+function closeSettings() {
+  settingsOverlay.classList.add('hidden');
+}
+
+document.getElementById('btn-open-settings').addEventListener('click', openSettings);
+document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
+document.getElementById('btn-settings-logout').addEventListener('click', () => { closeSettings(); logout(); });
+
+settingsOverlay.addEventListener('click', e => {
+  if (e.target === settingsOverlay) closeSettings();
 });
 
 // ── Weight chart popup ───────────────────────────────────────────────────────
