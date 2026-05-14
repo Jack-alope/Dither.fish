@@ -242,8 +242,19 @@ class AppState: ObservableObject {
     }
 
     func updateTrip(_ trip: Trip) async throws {
+        // Optimistically update local state immediately so the UI responds at once
+        if let idx = trips.firstIndex(where: { $0.id == trip.id }) {
+            trips[idx] = trip
+        }
         let req = TripRequest(name: trip.name, destination: trip.destination, startDate: trip.startDate, endDate: trip.endDate, notes: trip.notes, packs: trip.packs, archived: trip.archived, frozenGear: trip.frozenGear, frozenBundles: trip.frozenBundles)
-        let updated = try await APIService.shared.updateTrip(id: trip.id, req: req)
+        var updated = try await APIService.shared.updateTrip(id: trip.id, req: req)
+        // The server may not yet have archived/frozenGear/frozenBundles in its schema.
+        // If it stripped them, preserve our local values so the UI stays correct.
+        if trip.archived && !updated.archived {
+            updated.archived      = trip.archived
+            updated.frozenGear    = trip.frozenGear
+            updated.frozenBundles = trip.frozenBundles
+        }
         if let idx = trips.firstIndex(where: { $0.id == trip.id }) {
             trips[idx] = updated
         }

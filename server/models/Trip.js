@@ -32,15 +32,40 @@ const packSchema = new mongoose.Schema({
   bundleRefs: { type: [bundleRefSchema], default: [] },
 });
 
+// Frozen gear/bundle snapshots stored when a trip is archived
+const frozenGearSchema = new mongoose.Schema({
+  _id:      { type: mongoose.Schema.Types.ObjectId },
+  name:     { type: String },
+  brand:    { type: String, default: '' },
+  category: { type: String, default: '' },
+  weight:   { type: Number, default: null },
+  qty:      { type: Number, default: 1 },
+  notes:    { type: String, default: '' },
+}, { _id: false });
+
+const frozenBundleItemSchema = new mongoose.Schema({
+  gearId: { type: String },
+  qty:    { type: Number, default: 1 },
+}, { _id: false });
+
+const frozenBundleSchema = new mongoose.Schema({
+  _id:   { type: mongoose.Schema.Types.ObjectId },
+  name:  { type: String },
+  items: { type: [frozenBundleItemSchema], default: [] },
+}, { _id: false });
+
 const tripSchema = new mongoose.Schema({
-  userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  name:        { type: String, required: true, trim: true },
-  destination: { type: String, default: '' },
-  startDate:   { type: String, default: '' },
-  endDate:     { type: String, default: '' },
-  notes:       { type: String, default: '' },
-  pack:        { type: [packItemSchema], default: [] },
-  packs:       { type: [packSchema], default: [] },
+  userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  name:          { type: String, required: true, trim: true },
+  destination:   { type: String, default: '' },
+  startDate:     { type: String, default: '' },
+  endDate:       { type: String, default: '' },
+  notes:         { type: String, default: '' },
+  pack:          { type: [packItemSchema], default: [] },
+  packs:         { type: [packSchema], default: [] },
+  archived:      { type: Boolean, default: false },
+  frozenGear:    { type: [frozenGearSchema], default: null },
+  frozenBundles: { type: [frozenBundleSchema], default: null },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Trip', tripSchema);

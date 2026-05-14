@@ -9,6 +9,21 @@ struct TripsView: View {
         NavigationLink(destination: TripDetailView(tripId: trip.id)) {
             TripRowView(trip: trip)
         }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                Task {
+                    if trip.archived {
+                        try? await state.unarchiveTrip(id: trip.id)
+                    } else {
+                        try? await state.archiveTrip(id: trip.id)
+                    }
+                }
+            } label: {
+                Label(trip.archived ? "Unarchive" : "Archive",
+                      systemImage: trip.archived ? "arrow.uturn.up.circle" : "archivebox")
+            }
+            .tint(trip.archived ? .blue : .secondary)
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 Task { try? await state.deleteTrip(id: trip.id) }
