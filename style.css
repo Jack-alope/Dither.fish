@@ -151,24 +151,299 @@ header {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
 }
-#header-username {
-  font-size: 0.85rem;
-  color: rgba(255,255,255,0.8);
-}
-.btn-logout {
-  background: rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.25);
+
+/* ── User menu button ── */
+.user-menu { position: relative; }
+
+.user-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.22);
   color: #fff;
-  padding: 0.3rem 0.75rem;
-  border-radius: 6px;
+  padding: 0.3rem 0.55rem 0.3rem 0.7rem;
+  border-radius: 20px;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 500;
   transition: background 0.15s;
+  white-space: nowrap;
 }
-.btn-logout:hover { background: rgba(255,255,255,0.25); }
+.user-menu-btn:hover { background: rgba(255,255,255,0.22); }
+
+#header-username { color: inherit; }
+
+.user-menu-chevron {
+  opacity: 0.75;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.user-menu-btn[aria-expanded="true"] .user-menu-chevron { transform: rotate(180deg); }
+
+/* ── Dropdown panel ── */
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.07);
+  min-width: 200px;
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownIn 0.15s ease;
+}
+@keyframes dropdownIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.user-dropdown-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+}
+.user-avatar-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #d8f3dc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #2d6a4f;
+  flex-shrink: 0;
+}
+.user-dropdown-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1a1a1a;
+}
+.user-dropdown-role {
+  font-size: 0.75rem;
+  color: #2d6a4f;
+  font-weight: 500;
+  margin-top: 1px;
+}
+.user-dropdown-divider {
+  border: none;
+  border-top: 1px solid #f0f0f0;
+  margin: 0;
+}
+.user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  background: none;
+  border: none;
+  font-size: 0.875rem;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.user-dropdown-item:hover { background: #f5f5f5; }
+.user-dropdown-signout { color: #c0392b; }
+.user-dropdown-signout:hover { background: #fff5f5; }
+
+/* ── Settings modal ── */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.15s ease;
+}
+.settings-overlay.hidden { display: none; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.settings-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  width: 100%;
+  max-width: 380px;
+  overflow: hidden;
+  animation: modalIn 0.18s ease;
+  display: flex;
+  flex-direction: column;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem 0.875rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+.settings-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.settings-close {
+  background: #f5f5f5;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #666;
+  transition: background 0.15s;
+}
+.settings-close:hover { background: #ebebeb; color: #333; }
+
+.settings-body {
+  flex: 1;
+  padding: 0.5rem 0;
+}
+
+.settings-section {
+  padding: 0.75rem 1.25rem;
+}
+.settings-section + .settings-section {
+  border-top: 1px solid #f5f5f5;
+}
+
+.settings-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.settings-account-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.settings-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.settings-username {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.settings-admin-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 0.1rem 0.45rem;
+  border-radius: 20px;
+  margin-top: 2px;
+}
+
+.settings-support-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: #fffbf5;
+  border: 1px solid #fde8c3;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.15s, border-color 0.15s;
+}
+.settings-support-link:hover {
+  background: #fff5e6;
+  border-color: #f7c98a;
+}
+.settings-support-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+.settings-support-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #7c4a00;
+}
+.settings-support-sub {
+  font-size: 0.75rem;
+  color: #a86a1a;
+  margin-top: 1px;
+}
+.settings-support-arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #c68a2a;
+}
+.settings-opensource-link {
+  background: #f6f8fa;
+  border-color: #d0d7de;
+}
+.settings-opensource-link:hover {
+  background: #eef1f4;
+  border-color: #b0bbc5;
+}
+.settings-opensource-link .settings-support-icon {
+  color: #24292f;
+}
+.settings-opensource-title { color: #24292f; }
+.settings-opensource-link .settings-support-sub { color: #57606a; }
+.settings-opensource-link .settings-support-arrow { color: #57606a; }
+
+.settings-footer {
+  padding: 0.875rem 1.25rem;
+  border-top: 1px solid #f0f0f0;
+}
+.settings-signout-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.875rem;
+  background: #fff5f5;
+  border: 1px solid #fdd;
+  border-radius: 8px;
+  color: var(--danger);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.settings-signout-btn:hover {
+  background: #ffe8e8;
+  border-color: #f5c2c2;
+}
+
 nav { display: flex; gap: 0.25rem; }
 .nav-btn {
   background: transparent;
@@ -638,6 +913,17 @@ main {
 
 /* ── Trip list ── */
 .trip-list { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; }
+/* Section headers inside trip list */
+.trip-section-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0.5rem 0 0.25rem;
+  list-style: none;
+}
+.trip-section-header:first-child { padding-top: 0; }
 .trip-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -650,6 +936,26 @@ main {
   justify-content: space-between;
 }
 .trip-card:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-color: var(--accent); }
+.trip-card-archived { opacity: 0.72; }
+.trip-archived-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  color: var(--text-muted);
+  vertical-align: middle;
+  margin-left: 0.35rem;
+}
+.trip-archived-banner {
+  background: var(--text-muted);
+  color: #fff;
+  font-size: 0.82rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+}
 .trip-card-info h4 { font-size: 1rem; font-weight: 600; }
 .trip-card-info .meta { font-size: 0.83rem; color: var(--text-muted); margin-top: 0.15rem; }
 .trip-detail-notes { font-size: 0.88rem; color: var(--text-muted); margin-top: -0.75rem; margin-bottom: 1.5rem; font-style: italic; }
