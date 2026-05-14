@@ -6,6 +6,7 @@ struct CatalogView: View {
     @State private var selectedCategory = "All"
     @State private var showSuggestSheet = false
     @State private var editingCatalogItem: CatalogItem?
+    @State private var addedItemName: String? = nil
 
     var categories: [String] {
         var cats = ["All"]
@@ -78,6 +79,14 @@ struct CatalogView: View {
                         Section(header: Text(category).ditherSectionHeader()) {
                             ForEach(items) { item in
                                 CatalogItemRow(item: item)
+                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                        Button {
+                                            Task { await addToLocker(item) }
+                                        } label: {
+                                            Label("Add to Locker", systemImage: "plus.circle.fill")
+                                        }
+                                        .tint(.ditherGreen)
+                                    }
                             }
                         }
                     }
@@ -85,6 +94,22 @@ struct CatalogView: View {
             }
             .listStyle(.insetGrouped)
             .searchable(text: $searchText, prompt: "Search catalog...")
+            .overlay(alignment: .bottom) {
+                if let name = addedItemName {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("\(name) added to gear locker")
+                            .font(.subheadline).fontWeight(.medium)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(Color.ditherGreen.opacity(0.95))
+                    .clipShape(Capsule())
+                    .padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.35), value: addedItemName)
             .refreshable {
                 await state.fetchCatalog()
                 if state.isAdmin { await state.loadPending() }
@@ -123,6 +148,20 @@ struct CatalogView: View {
                 if state.isAdmin { await state.loadPending() }
             }
         }
+    }
+
+    private func addToLocker(_ item: CatalogItem) async {
+        try? await state.addGear(
+            name: item.name,
+            brand: item.brand,
+            category: item.category,
+            weight: item.weight,
+            qty: 1,
+            notes: item.notes
+        )
+        addedItemName = item.name
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        addedItemName = nil
     }
 }
 
