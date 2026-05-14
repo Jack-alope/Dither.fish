@@ -64,6 +64,56 @@ struct SettingsView: View {
                     }
                 }
 
+                // ── Support ────────────────────────────────────────────────
+                Section(header: Text("Support").ditherSectionHeader()) {
+                    Link(destination: URL(string: "https://buymeacoffee.com/mrph")!) {
+                        HStack(spacing: 14) {
+                            Text("☕")
+                                .font(.title2)
+                                .frame(width: 36, height: 36)
+                                .background(Color(red: 1.0, green: 0.95, blue: 0.87))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Buy me a coffee")
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                                Text("Help keep Dither.fish running")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    Link(destination: URL(string: "https://github.com/Jack-alope/Dither.fish")!) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "curlybraces")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(.label))
+                                .frame(width: 36, height: 36)
+                                .background(Color(.systemGray5))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Open source")
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                                Text("View the code on GitHub")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 // ── App ────────────────────────────────────────────────────
                 Section(header: Text("App").ditherSectionHeader()) {
                     LabeledContent("Version") {
