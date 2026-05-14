@@ -40,8 +40,9 @@ async function api(path, options = {}) {
 
 // ── Auth screens ─────────────────────────────────────────────────────────────
 
-const authScreen   = document.getElementById('auth-screen');
-const appEl        = document.getElementById('app');
+const landingScreen = document.getElementById('landing-screen');
+const authScreen    = document.getElementById('auth-screen');
+const appEl         = document.getElementById('app');
 const offlineBanner = document.getElementById('offline-banner');
 
 function setOffline(offline) {
@@ -52,6 +53,7 @@ window.addEventListener('offline', () => setOffline(true));
 setOffline(!navigator.onLine);
 
 function showApp() {
+  landingScreen.classList.add('hidden');
   authScreen.classList.add('hidden');
   appEl.classList.remove('hidden');
   const uname = currentUsername || '';
@@ -64,9 +66,23 @@ function showApp() {
   loadAll();
 }
 
-function showAuth() {
+function showLanding() {
+  landingScreen.classList.remove('hidden');
+  authScreen.classList.add('hidden');
+  appEl.classList.add('hidden');
+}
+
+function showAuth(defaultTab = 'login') {
+  landingScreen.classList.add('hidden');
   authScreen.classList.remove('hidden');
   appEl.classList.add('hidden');
+  // Switch to the requested tab
+  document.querySelectorAll('.auth-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === defaultTab);
+  });
+  document.querySelectorAll('.auth-form').forEach(f => {
+    f.classList.toggle('hidden', f.id !== `form-${defaultTab}`);
+  });
 }
 
 async function loadAll() {
@@ -133,7 +149,13 @@ function normalizeTrip(t)  {
   return base;
 }
 
-if (authToken) { showApp(); } else { showAuth(); }
+if (authToken) { showApp(); } else { showLanding(); }
+
+// Landing page buttons
+document.getElementById('lp-btn-signin').addEventListener('click', () => showAuth('login'));
+document.getElementById('lp-btn-signin2').addEventListener('click', () => showAuth('login'));
+document.getElementById('lp-btn-getstarted').addEventListener('click', () => showAuth('register'));
+document.getElementById('lp-btn-getstarted2').addEventListener('click', () => showAuth('register'));
 
 // Auth tab switching
 document.querySelectorAll('.auth-tab').forEach(tab => {
@@ -207,7 +229,7 @@ function logout() {
   localStorage.removeItem('lp_username');
   localStorage.removeItem('lp_isAdmin');
   gear = []; trips = []; catalog = [];
-  showAuth();
+  showLanding();
 }
 // ── User menu dropdown ───────────────────────────────────────────────────────
 const userMenuBtn      = document.getElementById('btn-user-menu');

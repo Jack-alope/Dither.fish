@@ -17,6 +17,127 @@
 </head>
 <body>
 
+  <!-- ───── LANDING PAGE ───── -->
+  <div id="landing-screen" class="hidden">
+    <header class="lp-header">
+      <div class="lp-header-inner">
+        <a class="lp-logo" href="#">
+          <img src="/favicons/wordmark-horizontal.svg" alt="Dither.fish" class="lp-wordmark" />
+        </a>
+        <nav class="lp-nav">
+          <a href="https://github.com/Jack-alope/Dither.fish" target="_blank" rel="noopener" class="lp-nav-link">GitHub</a>
+          <button class="lp-btn-signin" id="lp-btn-signin">Sign in</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="lp-main">
+      <!-- Hero -->
+      <section class="lp-hero">
+        <div class="lp-hero-inner">
+          <div class="lp-hero-badge">Free &amp; open source</div>
+          <h1 class="lp-hero-title">Pack smarter.<br>Hike lighter.</h1>
+          <p class="lp-hero-sub">Dither.fish is a lightweight gear manager and trip planner built for backpackers. Track your kit, build bundles, and plan every pack — down to the gram.</p>
+          <div class="lp-hero-ctas">
+            <button class="lp-cta-primary" id="lp-btn-getstarted">Get started free</button>
+            <button class="lp-cta-secondary" id="lp-btn-signin2">Sign in</button>
+          </div>
+        </div>
+        <div class="lp-hero-visual" aria-hidden="true">
+          <div class="lp-visual-card lp-vc1">
+            <div class="lp-vc-label">Base weight</div>
+            <div class="lp-vc-value" style="color:var(--accent)">4.2 kg</div>
+            <div class="lp-vc-bar">
+              <div class="lp-vc-bar-fill" style="width:52%;background:var(--accent)"></div>
+            </div>
+            <div class="lp-vc-row"><span class="lp-vc-dot" style="background:#3b82f6"></span>Base <span class="lp-vc-num">3.1 kg</span></div>
+            <div class="lp-vc-row"><span class="lp-vc-dot" style="background:#f97316"></span>Worn <span class="lp-vc-num">0.7 kg</span></div>
+            <div class="lp-vc-row"><span class="lp-vc-dot" style="background:#ef4444"></span>Consumable <span class="lp-vc-num">0.4 kg</span></div>
+          </div>
+          <div class="lp-visual-card lp-vc2">
+            <div class="lp-vc-label">Gear Locker</div>
+            <div class="lp-vc-item"><span class="lp-vc-item-dot"></span>Zpacks Arc Blast<span class="lp-vc-item-w">650 g</span></div>
+            <div class="lp-vc-item"><span class="lp-vc-item-dot"></span>Enlightened Equipment Quilt<span class="lp-vc-item-w">510 g</span></div>
+            <div class="lp-vc-item"><span class="lp-vc-item-dot"></span>Tarptent Notch Li<span class="lp-vc-item-w">730 g</span></div>
+            <div class="lp-vc-item"><span class="lp-vc-item-dot"></span>Sawyer Squeeze<span class="lp-vc-item-w">85 g</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="lp-features">
+        <div class="lp-section-inner">
+          <h2 class="lp-section-title">Everything you need, nothing you don't</h2>
+          <div class="lp-feature-grid">
+            <div class="lp-feature-card">
+              <div class="lp-feature-icon" style="background:#e8f5ee;color:#2d6a4f">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14M5 8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+              </div>
+              <h3>Gear Locker</h3>
+              <p>One place for all your gear. Track weight, brand, category, and quantity. Filter and search your entire kit in seconds.</p>
+            </div>
+            <div class="lp-feature-card">
+              <div class="lp-feature-icon" style="background:#e8f0ff;color:#3b5bdb">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>
+              </div>
+              <h3>Trip Planning</h3>
+              <p>Create trips, add multiple packs, and organise gear into cubes. See weight breakdowns by base, worn, and consumable — per pack.</p>
+            </div>
+            <div class="lp-feature-card">
+              <div class="lp-feature-icon" style="background:#fff4e6;color:#e67700">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>
+              </div>
+              <h3>Bundles</h3>
+              <p>Group gear that always travels together — shelter system, sleep kit, cook setup. Add a bundle to any pack in one tap.</p>
+            </div>
+            <div class="lp-feature-card">
+              <div class="lp-feature-icon" style="background:#f3f0ff;color:#7048e8">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>
+              </div>
+              <h3>Gear Catalog</h3>
+              <p>Browse community-curated gear with weights verified from manufacturer specs. Add items directly to your locker.</p>
+            </div>
+            <div class="lp-feature-card">
+              <div class="lp-feature-icon" style="background:#fff0f3;color:#c2255c">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </div>
+              <h3>Packing Checklist</h3>
+              <p>Check items off as you pack. Trip archives freeze your gear snapshot so you always have a record of exactly what you carried.</p>
+            </div>
+            <div class="lp-feature-card">
+              <div class="lp-feature-icon" style="background:#e6fcf5;color:#0ca678">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2Z"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2Z"/></svg>
+              </div>
+              <h3>Works offline</h3>
+              <p>The iOS app queues changes when you're out of signal and syncs automatically when you reconnect. No bars needed on trail.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA strip -->
+      <section class="lp-cta-strip">
+        <div class="lp-section-inner lp-cta-strip-inner">
+          <div>
+            <h2>Ready to lighten your load?</h2>
+            <p>Free forever. No credit card. Open source.</p>
+          </div>
+          <button class="lp-cta-primary lp-cta-strip-btn" id="lp-btn-getstarted2">Create a free account</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="lp-footer">
+      <div class="lp-footer-inner">
+        <span class="lp-footer-copy">© 2025 Dither.fish</span>
+        <div class="lp-footer-links">
+          <a href="https://github.com/Jack-alope/Dither.fish" target="_blank" rel="noopener">Open source</a>
+          <a href="https://buymeacoffee.com/mrph" target="_blank" rel="noopener">Support</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
   <!-- ───── AUTH SCREEN ───── -->
   <div id="auth-screen">
     <div class="auth-card">
