@@ -405,6 +405,20 @@ header {
   flex-shrink: 0;
   color: #c68a2a;
 }
+.settings-opensource-link {
+  background: #f6f8fa;
+  border-color: #d0d7de;
+}
+.settings-opensource-link:hover {
+  background: #eef1f4;
+  border-color: #b0bbc5;
+}
+.settings-opensource-link .settings-support-icon {
+  color: #24292f;
+}
+.settings-opensource-title { color: #24292f; }
+.settings-opensource-link .settings-support-sub { color: #57606a; }
+.settings-opensource-link .settings-support-arrow { color: #57606a; }
 
 .settings-footer {
   padding: 0.875rem 1.25rem;
