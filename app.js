@@ -99,6 +99,13 @@ function normalizeBundle(b) {
 }
 function normalizeTrip(t)  {
   const base = { ...t, id: t._id ?? t.id };
+  base.archived     = base.archived ?? false;
+  base.frozenGear    = base.frozenGear    ? base.frozenGear.map(g => ({ ...g, id: g._id ?? g.id })) : null;
+  base.frozenBundles = base.frozenBundles ? base.frozenBundles.map(b => ({
+    ...b,
+    id: b._id ?? b.id,
+    items: (b.items || []).map(i => ({ ...i, gearId: i.gearId?._id ?? i.gearId })),
+  })) : null;
   if (!base.packs || base.packs.length === 0) {
     const legacy = (base.pack || []).map(p => ({ ...p, gearId: p.gearId?._id ?? p.gearId }));
     base.packs = [{ name: 'Pack 1', items: legacy }];
@@ -622,28 +629,70 @@ document.getElementById('btn-delete-trip').addEventListener('click', async () =>
   } catch (err) { alert(err.message); }
 });
 
+document.getElementById('btn-archive-trip').addEventListener('click', async () => {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const isArchived = trip.archived;
+  if (!isArchived && !confirm('Archive this trip? Gear data will be frozen as-is.')) return;
+  try {
+    let payload;
+    if (isArchived) {
+      // Unarchive: clear frozen data
+      payload = { ...trip, archived: false, frozenGear: null, frozenBundles: null };
+    } else {
+      // Archive: snapshot current gear + bundles referenced by this trip
+      const packGearIds = new Set((trip.packs || []).flatMap(pk => (pk.items || []).map(i => i.gearId)));
+      const bundleIds   = new Set((trip.packs || []).flatMap(pk => (pk.bundleRefs || []).map(br => br.bundleId)));
+      const frozenBundles = bundles.filter(b => bundleIds.has(b.id));
+      const bundleGearIds = new Set(frozenBundles.flatMap(b => b.items.map(i => i.gearId)));
+      const allGearIds = new Set([...packGearIds, ...bundleGearIds]);
+      const frozenGear = gear.filter(g => allGearIds.has(g.id));
+      payload = { ...trip, archived: true, frozenGear, frozenBundles };
+    }
+    const updated = normalizeTrip(await api(`/trips/${currentTripId}`, { method: 'PUT', body: payload }));
+    const idx = trips.findIndex(t => t.id === currentTripId);
+    if (idx >= 0) trips[idx] = updated;
+    renderTripList();
+    renderTripDetail();
+  } catch (err) { alert(err.message); }
+});
+
 function showTripList() {
   tripListPanel.classList.remove('hidden');
   tripDetailPanel.classList.add('hidden');
   currentTripId = null;
 }
 
-function renderTripList() {
-  tripsEmpty.style.display = trips.length ? 'none' : 'block';
-  tripListEl.innerHTML = trips.map(t => {
-    const itemCount = (t.packs || []).reduce((sum, pk) => sum + (pk.items || []).length, 0);
-    const meta = [t.destination, formatDateRange(t.startDate, t.endDate)].filter(Boolean).join(' · ');
-    return `
-      <li>
-        <div class="trip-card" data-trip="${t.id}">
-          <div class="trip-card-info">
-            <h4>${esc(t.name)}</h4>
-            ${meta ? `<div class="meta">${esc(meta)}</div>` : ''}
-          </div>
-          <span class="trip-card-badge">${itemCount} item${itemCount !== 1 ? 's' : ''}</span>
+function renderTripCard(t) {
+  const itemCount = (t.packs || []).reduce((sum, pk) => sum + (pk.items || []).length, 0);
+  const meta = [t.destination, formatDateRange(t.startDate, t.endDate)].filter(Boolean).join(' · ');
+  return `
+    <li>
+      <div class="trip-card${t.archived ? ' trip-card-archived' : ''}" data-trip="${t.id}">
+        <div class="trip-card-info">
+          <h4>${esc(t.name)}${t.archived ? ' <span class="trip-archived-badge">Completed</span>' : ''}</h4>
+          ${meta ? `<div class="meta">${esc(meta)}</div>` : ''}
         </div>
-      </li>`;
-  }).join('');
+        <span class="trip-card-badge">${itemCount} item${itemCount !== 1 ? 's' : ''}</span>
+      </div>
+    </li>`;
+}
+
+function renderTripList() {
+  const upcoming  = trips.filter(t => !t.archived);
+  const completed = trips.filter(t =>  t.archived);
+  const hasAny = upcoming.length + completed.length > 0;
+  tripsEmpty.style.display = hasAny ? 'none' : 'block';
+  let html = '';
+  if (upcoming.length) {
+    html += `<li class="trip-section-header">Upcoming Trips</li>`;
+    html += upcoming.map(renderTripCard).join('');
+  }
+  if (completed.length) {
+    html += `<li class="trip-section-header">Completed Trips</li>`;
+    html += completed.map(renderTripCard).join('');
+  }
+  tripListEl.innerHTML = html;
 }
 
 tripListEl.addEventListener('click', e => {
@@ -683,7 +732,7 @@ document.getElementById('form-trip').addEventListener('submit', async e => {
     let updated;
     if (id) {
       const existing = trips.find(t => t.id === id);
-      updated = normalizeTrip(await api(`/trips/${id}`, { method: 'PUT', body: { ...payload, packs: existing?.packs || [] } }));
+      updated = normalizeTrip(await api(`/trips/${id}`, { method: 'PUT', body: { ...payload, packs: existing?.packs || [], archived: existing?.archived ?? false, frozenGear: existing?.frozenGear ?? null, frozenBundles: existing?.frozenBundles ?? null } }));
       const idx = trips.findIndex(t => t.id === id);
       if (idx >= 0) trips[idx] = updated;
     } else {
@@ -723,6 +772,22 @@ function renderTripDetail() {
   const notesEl = document.getElementById('trip-detail-notes');
   notesEl.textContent = trip.notes || '';
   notesEl.classList.toggle('hidden', !trip.notes);
+  // Toggle controls based on archived state
+  const archiveBtn = document.getElementById('btn-archive-trip');
+  const editBtn    = document.getElementById('btn-edit-trip');
+  archiveBtn.textContent = trip.archived ? 'Unarchive' : 'Archive';
+  editBtn.classList.toggle('hidden', !!trip.archived);
+  // Archived banner
+  let bannerEl = document.getElementById('trip-archived-banner');
+  if (!bannerEl) {
+    bannerEl = document.createElement('div');
+    bannerEl.id = 'trip-archived-banner';
+    bannerEl.className = 'trip-archived-banner';
+    bannerEl.textContent = '📦 This trip is archived — gear is frozen at the time of completion.';
+    const nameEl = document.getElementById('trip-detail-name');
+    nameEl.parentNode.insertBefore(bannerEl, nameEl.nextSibling);
+  }
+  bannerEl.classList.toggle('hidden', !trip.archived);
   const packs = trip.packs || [];
   if (currentPackIdx >= packs.length) currentPackIdx = Math.max(0, packs.length - 1);
   renderPackSection(trip);
@@ -730,17 +795,21 @@ function renderTripDetail() {
 }
 
 function renderPackSection(trip) {
-  const packs = trip.packs || [];
+  const packs    = trip.packs || [];
+  const archived = !!trip.archived;
+  // Use frozen snapshots for archived trips, live data otherwise
+  const gearSrc    = archived && trip.frozenGear    ? trip.frozenGear    : gear;
+  const bundleSrc  = archived && trip.frozenBundles ? trip.frozenBundles : bundles;
 
   packTabsArea.innerHTML = `
     <div class="pack-tabs">
       ${packs.map((pk, i) => `
         <button class="pack-tab${i === currentPackIdx ? ' active' : ''}" data-tab="${i}">
           ${esc(pk.name || `Pack ${i + 1}`)}
-          ${packs.length > 1 ? `<span class="pack-tab-del" data-del-pack="${i}" title="Remove pack">×</span>` : ''}
+          ${!archived && packs.length > 1 ? `<span class="pack-tab-del" data-del-pack="${i}" title="Remove pack">×</span>` : ''}
         </button>
       `).join('')}
-      <button class="pack-tab pack-tab-new" data-new-pack>+ Pack</button>
+      ${!archived ? `<button class="pack-tab pack-tab-new" data-new-pack>+ Pack</button>` : ''}
     </div>`;
 
   const pack = packs[currentPackIdx];
@@ -750,7 +819,7 @@ function renderPackSection(trip) {
   const bundleRefs = pack.bundleRefs || [];
   let baseWeight = 0, wornWeight = 0, consumableWeight = 0;
   items.forEach(p => {
-    const g = gear.find(g => g.id === p.gearId);
+    const g = gearSrc.find(g => g.id === p.gearId);
     if (!g?.weight) return;
     const w = g.weight * p.qty;
     if (p.type === 'worn') wornWeight += w;
@@ -758,10 +827,10 @@ function renderPackSection(trip) {
     else baseWeight += w;
   });
   bundleRefs.forEach(br => {
-    const b = bundles.find(b => b.id === br.bundleId);
+    const b = bundleSrc.find(b => b.id === br.bundleId);
     if (!b) return;
     b.items.forEach(({ gearId, qty }) => {
-      const g = gear.find(g => g.id === gearId);
+      const g = gearSrc.find(g => g.id === gearId);
       if (!g?.weight) return;
       const w = g.weight * qty;
       const itemType = (br.itemTypes || []).find(t => t.gearId === gearId)?.type || 'base';
@@ -772,11 +841,11 @@ function renderPackSection(trip) {
   });
   const itemCheckedCount = items.filter(p => p.checked).length;
   const bundleCheckedCount = bundleRefs.reduce((sum, br) => {
-    const b = bundles.find(b => b.id === br.bundleId);
+    const b = bundleSrc.find(b => b.id === br.bundleId);
     return sum + (b?.items.filter(i => br.checkedItems.includes(i.gearId)).length || 0);
   }, 0);
   const bundleTotalCount = bundleRefs.reduce((sum, br) => {
-    const b = bundles.find(b => b.id === br.bundleId);
+    const b = bundleSrc.find(b => b.id === br.bundleId);
     return sum + (b?.items.length || 0);
   }, 0);
   const totalChecked = itemCheckedCount + bundleCheckedCount;
@@ -787,18 +856,19 @@ function renderPackSection(trip) {
   const hasCubes = cubes.length > 0;
 
   function renderItem(p) {
-    const g = gear.find(g => g.id === p.gearId);
+    const g = gearSrc.find(g => g.id === p.gearId);
     if (!g) return '';
     const lineWeight = g.weight != null ? formatWeight(g.weight * p.qty) : null;
     const itemType = p.type || 'base';
     return `
-      <li class="pack-item${p.checked ? ' pack-item-checked' : ''}" draggable="true" data-drag-id="${g.id}">
-        <span class="drag-handle" title="Drag to cube">⠿</span>
+      <li class="pack-item${p.checked ? ' pack-item-checked' : ''}"${!archived ? ` draggable="true" data-drag-id="${g.id}"` : ''}>
+        ${!archived ? `<span class="drag-handle" title="Drag to cube">⠿</span>` : ''}
         <input type="checkbox" class="pack-check" data-check="${g.id}" ${p.checked ? 'checked' : ''} />
         <div class="pack-item-info">
           <div class="pack-item-name">${esc(g.name)}</div>
           <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
         </div>
+        ${!archived ? `
         <div class="pack-item-qty">
           <button data-qty-dec="${g.id}">−</button>
           <span>${p.qty}</span>
@@ -808,30 +878,30 @@ function renderPackSection(trip) {
           <button class="item-type-btn${itemType === 'worn' ? ' active' : ''}" data-type-set="${g.id}" data-type="${itemType === 'worn' ? 'base' : 'worn'}" title="Worn"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M5 2Q6.5 5 8 5Q9.5 5 11 2L14 4l-2 3-2-1v7H6V6L4 7 2 4z"/></svg></button>
           <button class="item-type-btn${itemType === 'consumable' ? ' active' : ''}" data-type-set="${g.id}" data-type="${itemType === 'consumable' ? 'base' : 'consumable'}" title="Consumable"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" stroke="none"><path d="M8 1.5L4 9.5a4 4 0 008 0z"/></svg></button>
         </div>
-        <button class="pack-item-remove" data-remove="${g.id}" title="Remove">✕</button>
+        <button class="pack-item-remove" data-remove="${g.id}" title="Remove">✕</button>` : `<span class="pack-item-qty-label">×${p.qty}</span>`}
       </li>`;
   }
 
   const ungrouped = items.filter(p => !p.cubeId || !cubes.find(c => c.id === p.cubeId));
 
   function renderBundleGroup(br) {
-    const b = bundles.find(b => b.id === br.bundleId);
+    const b = bundleSrc.find(b => b.id === br.bundleId);
     if (!b) return '';
-    const bItems = b.items.filter(i => gear.find(g => g.id === i.gearId));
+    const bItems = b.items.filter(i => gearSrc.find(g => g.id === i.gearId));
     const bChecked = bItems.filter(i => br.checkedItems.includes(i.gearId)).length;
     const exp = br.expanded;
     return `
       <div class="pack-bundle-group${exp ? ' expanded' : ''}">
-        <div class="pack-bundle-header" data-toggle-bundle="${b.id}" draggable="true" data-drag-bundle="${b.id}">
-          <span class="drag-handle" title="Drag to cube">⠿</span>
+        <div class="pack-bundle-header" data-toggle-bundle="${b.id}"${!archived ? ` draggable="true" data-drag-bundle="${b.id}"` : ''}>
+          ${!archived ? `<span class="drag-handle" title="Drag to cube">⠿</span>` : ''}
           <span class="pack-bundle-chevron">${exp ? '▾' : '▸'}</span>
           <span class="pack-bundle-name">${esc(b.name)}</span>
           <span class="pack-bundle-stats">${bChecked}/${bItems.length} packed</span>
-          <button class="pack-bundle-remove" data-remove-bundle="${b.id}" title="Remove bundle">✕</button>
+          ${!archived ? `<button class="pack-bundle-remove" data-remove-bundle="${b.id}" title="Remove bundle">✕</button>` : ''}
         </div>
         ${exp ? `<ul class="pack-bundle-items">
           ${bItems.map(({ gearId, qty }) => {
-            const g = gear.find(g => g.id === gearId);
+            const g = gearSrc.find(g => g.id === gearId);
             if (!g) return '';
             const checked = br.checkedItems.includes(gearId);
             const lineWeight = g.weight != null ? formatWeight(g.weight * qty) : null;
@@ -844,10 +914,10 @@ function renderPackSection(trip) {
                   <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
                 </div>
                 ${qty > 1 ? `<span class="pack-bundle-qty">×${qty}</span>` : ''}
-                <div class="item-type-toggle">
+                ${!archived ? `<div class="item-type-toggle">
                   <button class="item-type-btn${itemType === 'worn' ? ' active' : ''}" data-bundle-type-set="${gearId}" data-bundle-id="${b.id}" data-type="${itemType === 'worn' ? 'base' : 'worn'}" title="Worn"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M5 2Q6.5 5 8 5Q9.5 5 11 2L14 4l-2 3-2-1v7H6V6L4 7 2 4z"/></svg></button>
                   <button class="item-type-btn${itemType === 'consumable' ? ' active' : ''}" data-bundle-type-set="${gearId}" data-bundle-id="${b.id}" data-type="${itemType === 'consumable' ? 'base' : 'consumable'}" title="Consumable"><svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" stroke="none"><path d="M8 1.5L4 9.5a4 4 0 008 0z"/></svg></button>
-                </div>
+                </div>` : ''}
               </li>`;
           }).join('')}
         </ul>` : ''}
