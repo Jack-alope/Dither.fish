@@ -209,8 +209,6 @@ function logout() {
   gear = []; trips = []; catalog = [];
   showAuth();
 }
-document.getElementById('btn-logout').addEventListener('click', logout);
-
 // ── User menu dropdown ───────────────────────────────────────────────────────
 const userMenuBtn      = document.getElementById('btn-user-menu');
 const userDropdown     = document.getElementById('user-dropdown');
