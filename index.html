@@ -361,9 +361,16 @@
         <label>Name <input type="text" name="name" required /></label>
         <label>Brand <input type="text" name="brand" /></label>
         <label>Category <input type="text" name="category" list="category-list" /></label>
-        <label>Weight (g) <input type="number" name="weight" min="0" step="0.1" /></label>
+        <label>Weight (g) <input type="number" name="weight" min="0" step="0.1" placeholder="Leave blank if using variants" /></label>
         <label>Notes <textarea name="notes" rows="2"></textarea></label>
         <input type="hidden" name="id" />
+        <div class="variants-section">
+          <div class="variants-header">
+            <span class="variants-label">Variants <span class="variants-hint">sizes, colours, capacities…</span></span>
+            <button type="button" class="btn-add-variant" id="btn-add-variant">+ Add variant</button>
+          </div>
+          <div id="form-variants-list"></div>
+        </div>
         <div class="form-actions">
           <button type="button" class="btn-secondary" data-close-modal>Cancel</button>
           <button type="submit" class="btn-primary">Save</button>
@@ -396,6 +403,26 @@
       <div id="note-popup-meta" class="note-popup-meta"></div>
     </div>
     <p id="note-popup-text"></p>
+  </div>
+
+  <!-- ───── VARIANT PICKER ───── -->
+  <div class="variant-overlay hidden" id="variant-overlay">
+    <div class="variant-modal" role="dialog" aria-modal="true">
+      <div class="variant-modal-header">
+        <div>
+          <div class="variant-modal-title" id="variant-modal-title"></div>
+          <div class="variant-modal-brand" id="variant-modal-brand"></div>
+        </div>
+        <button class="variant-modal-close" id="variant-modal-close" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <p class="variant-modal-sub">Select a variant to add to your gear locker</p>
+      <div class="variant-list" id="variant-list" role="radiogroup"></div>
+      <div class="variant-modal-footer">
+        <button class="btn-primary variant-add-btn" id="variant-add-btn">Add to Gear Locker</button>
+      </div>
+    </div>
   </div>
 
   <!-- ───── SETTINGS MODAL ───── -->

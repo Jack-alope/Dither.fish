@@ -1428,6 +1428,111 @@ document.getElementById('form-suggest').addEventListener('submit', async e => {
   } catch (err) { alert(err.message); }
 });
 
+// ── Add catalog item to gear locker ─────────────────────────────────────────
+async function addCatalogItemToGear(item, variant, btn) {
+  const name   = variant ? `${item.name} (${variant.name})` : item.name;
+  const weight = variant ? (variant.weight ?? item.weight) : item.weight;
+  try {
+    const created = normalizeGear(await api('/gear', {
+      method: 'POST',
+      body: { name, brand: item.brand || '', category: item.category, weight, qty: 1, notes: item.notes || '' },
+    }));
+    gear.push(created);
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = 'Added!';
+      btn.disabled = true;
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+    }
+  } catch (err) { alert(err.message); }
+}
+
+// ── Variant picker ───────────────────────────────────────────────────────────
+const variantOverlay = document.getElementById('variant-overlay');
+let variantPickerItem = null;
+let variantPickerBtn  = null;
+
+function openVariantPicker(item, btn) {
+  variantPickerItem = item;
+  variantPickerBtn  = btn;
+  document.getElementById('variant-modal-title').textContent = item.name;
+  document.getElementById('variant-modal-brand').textContent = [item.brand, item.category].filter(Boolean).join(' · ');
+  const list = document.getElementById('variant-list');
+  list.innerHTML = item.variants.map((v, i) => `
+    <label class="variant-option ${i === 0 ? 'selected' : ''}">
+      <input type="radio" name="variant-pick" value="${i}" ${i === 0 ? 'checked' : ''} />
+      <span class="variant-option-name">${esc(v.name)}</span>
+      ${v.weight != null ? `<span class="variant-option-weight">${formatWeight(v.weight)}</span>` : ''}
+    </label>
+  `).join('');
+  list.querySelectorAll('.variant-option').forEach(label => {
+    label.querySelector('input').addEventListener('change', () => {
+      list.querySelectorAll('.variant-option').forEach(l => l.classList.remove('selected'));
+      label.classList.add('selected');
+    });
+  });
+  variantOverlay.classList.remove('hidden');
+}
+
+function closeVariantPicker() {
+  variantOverlay.classList.add('hidden');
+  variantPickerItem = null;
+  variantPickerBtn  = null;
+}
+
+document.getElementById('variant-modal-close').addEventListener('click', closeVariantPicker);
+variantOverlay.addEventListener('click', e => { if (e.target === variantOverlay) closeVariantPicker(); });
+document.getElementById('variant-add-btn').addEventListener('click', async () => {
+  if (!variantPickerItem) return;
+  const checked = document.querySelector('input[name="variant-pick"]:checked');
+  const idx     = checked ? parseInt(checked.value) : 0;
+  const variant = variantPickerItem.variants[idx];
+  const item    = variantPickerItem;
+  const btn     = variantPickerBtn;
+  closeVariantPicker();
+  await addCatalogItemToGear(item, variant, btn);
+});
+
+// ── Admin: edit catalog item ─────────────────────────────────────────────────
+function renderVariantRows(variants = []) {
+  const list = document.getElementById('form-variants-list');
+  list.innerHTML = variants.map((v, i) => `
+    <div class="variant-row" data-vi="${i}">
+      <input type="text" class="variant-row-name" placeholder="Name (e.g. Large / 65L)" value="${esc(v.name)}" />
+      <input type="number" class="variant-row-weight" placeholder="Weight (g)" min="0" step="0.1" value="${v.weight ?? ''}" />
+      <button type="button" class="variant-row-remove" data-vi="${i}" aria-label="Remove">✕</button>
+    </div>
+  `).join('');
+  list.querySelectorAll('.variant-row-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('.variant-row').remove();
+    });
+  });
+}
+
+function collectVariants() {
+  return [...document.querySelectorAll('#form-variants-list .variant-row')].map(row => ({
+    name:   row.querySelector('.variant-row-name').value.trim(),
+    weight: row.querySelector('.variant-row-weight').value !== '' ? parseFloat(row.querySelector('.variant-row-weight').value) : null,
+  })).filter(v => v.name);
+}
+
+document.getElementById('btn-add-variant').addEventListener('click', () => {
+  const list = document.getElementById('form-variants-list');
+  const i    = list.children.length;
+  const div  = document.createElement('div');
+  div.className = 'variant-row';
+  div.dataset.vi = i;
+  div.innerHTML = `
+    <input type="text" class="variant-row-name" placeholder="Name (e.g. Large / 65L)" />
+    <input type="number" class="variant-row-weight" placeholder="Weight (g)" min="0" step="0.1" />
+    <button type="button" class="variant-row-remove" aria-label="Remove">✕</button>
+  `;
+  div.querySelector('.variant-row-remove').addEventListener('click', () => div.remove());
+  list.appendChild(div);
+  div.querySelector('.variant-row-name').focus();
+});
+
 function openCatalogEditModal(item) {
   const form = document.getElementById('form-catalog-edit');
   form.reset();
@@ -1437,6 +1542,7 @@ function openCatalogEditModal(item) {
   form.weight.value   = item.weight ?? '';
   form.notes.value    = item.notes || '';
   form.id.value       = item._id ?? item.id;
+  renderVariantRows(item.variants || []);
   openModal(modalCatalogEdit);
 }
 
@@ -1453,10 +1559,10 @@ document.getElementById('form-catalog-edit').addEventListener('submit', async e 
         category: fd.get('category').trim(),
         weight:   fd.get('weight') !== '' ? parseFloat(fd.get('weight')) : null,
         notes:    fd.get('notes').trim(),
+        variants: collectVariants(),
       },
     });
     if (!updated) return;
-    // Update local arrays
     const ci = catalog.findIndex(c => (c._id ?? c.id) === id);
     if (ci >= 0) catalog[ci] = { ...updated, id: updated._id };
     closeModal();
@@ -1508,7 +1614,10 @@ function renderCatalog() {
           ${items.map(c => `
             <tr>
               <td>
-                <strong ${c.notes ? `class="item-name-link" data-note="${esc(c.notes)}" data-item-name="${esc(c.name)}" data-item-brand="${esc(c.brand || '')}" data-item-weight="${c.weight != null ? c.weight + 'g' : ''}" title="Click to view notes"` : ''}>${esc(c.name)}</strong>
+                <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+                  <strong ${c.notes ? `class="item-name-link" data-note="${esc(c.notes)}" data-item-name="${esc(c.name)}" data-item-brand="${esc(c.brand || '')}" data-item-weight="${c.weight != null ? c.weight + 'g' : ''}" title="Click to view notes"` : ''}>${esc(c.name)}</strong>
+                  ${(c.variants && c.variants.length > 0) ? `<span class="variant-count-badge">${c.variants.length} variant${c.variants.length !== 1 ? 's' : ''}</span>` : ''}
+                </div>
                 ${(c.brand || c.weight != null) ? `<div class="item-brand">${[c.brand, c.weight != null ? `${c.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
               </td>
               <td class="col-actions">
@@ -1534,16 +1643,11 @@ catalogContainer.addEventListener('click', async e => {
   if (catalogId) {
     const item = catalog.find(c => (c._id ?? c.id) === catalogId || c.id === catalogId);
     if (!item) return;
-    try {
-      const created = normalizeGear(await api('/gear', {
-        method: 'POST',
-        body: { name: item.name, brand: item.brand || '', category: item.category, weight: item.weight, qty: 1, notes: item.notes || '' },
-      }));
-      gear.push(created);
-      e.target.textContent = 'Added!';
-      e.target.disabled = true;
-      setTimeout(() => { e.target.textContent = '+ My Gear'; e.target.disabled = false; }, 2000);
-    } catch (err) { alert(err.message); }
+    if (item.variants && item.variants.length > 0) {
+      openVariantPicker(item, e.target);
+    } else {
+      await addCatalogItemToGear(item, null, e.target);
+    }
   }
 
   if (editId) {

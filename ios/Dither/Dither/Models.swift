@@ -187,6 +187,13 @@ struct BundleItemType: Codable {
 }
 
 // MARK: - Catalog
+struct CatalogVariant: Codable, Identifiable {
+    let _id: String
+    let name: String
+    let weight: Double?
+    var id: String { _id }
+}
+
 struct CatalogItem: Codable, Identifiable {
     let _id: String
     let name: String
@@ -196,8 +203,26 @@ struct CatalogItem: Codable, Identifiable {
     let notes: String
     let status: String
     let submittedBy: String?
+    let variants: [CatalogVariant]
 
     var id: String { _id }
+
+    enum CodingKeys: String, CodingKey {
+        case _id, name, brand, category, weight, notes, status, submittedBy, variants
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        _id         = try c.decode(String.self, forKey: ._id)
+        name        = try c.decode(String.self, forKey: .name)
+        brand       = (try? c.decodeIfPresent(String.self, forKey: .brand))  ?? ""
+        category    = (try? c.decodeIfPresent(String.self, forKey: .category)) ?? ""
+        weight      = try? c.decodeIfPresent(Double.self, forKey: .weight)
+        notes       = (try? c.decodeIfPresent(String.self, forKey: .notes))  ?? ""
+        status      = (try? c.decodeIfPresent(String.self, forKey: .status)) ?? ""
+        submittedBy = try? c.decodeIfPresent(String.self, forKey: .submittedBy)
+        variants    = (try? c.decodeIfPresent([CatalogVariant].self, forKey: .variants)) ?? []
+    }
 }
 
 // MARK: - Generic API Result

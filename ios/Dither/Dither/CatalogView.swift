@@ -7,6 +7,7 @@ struct CatalogView: View {
     @State private var showSuggestSheet = false
     @State private var editingCatalogItem: CatalogItem?
     @State private var addedItemName: String? = nil
+    @State private var variantPickerItem: CatalogItem? = nil
 
     var categories: [String] {
         var cats = ["All"]
@@ -81,7 +82,11 @@ struct CatalogView: View {
                                 CatalogItemRow(item: item)
                                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                                         Button {
-                                            Task { await addToLocker(item) }
+                                            if item.variants.isEmpty {
+                                                Task { await addToLocker(item) }
+                                            } else {
+                                                variantPickerItem = item
+                                            }
                                         } label: {
                                             Label("Add to Locker", systemImage: "plus.circle.fill")
                                         }
@@ -110,6 +115,11 @@ struct CatalogView: View {
                 }
             }
             .animation(.spring(response: 0.35), value: addedItemName)
+            .sheet(item: $variantPickerItem) { item in
+                CatalogVariantPickerSheet(item: item) { variant in
+                    Task { await addToLocker(item, variant: variant) }
+                }
+            }
             .refreshable {
                 await state.fetchCatalog()
                 if state.isAdmin { await state.loadPending() }
@@ -150,16 +160,18 @@ struct CatalogView: View {
         }
     }
 
-    private func addToLocker(_ item: CatalogItem) async {
+    private func addToLocker(_ item: CatalogItem, variant: CatalogVariant? = nil) async {
+        let name   = variant != nil ? "\(item.name) (\(variant!.name))" : item.name
+        let weight = variant?.weight ?? item.weight
         try? await state.addGear(
-            name: item.name,
+            name: name,
             brand: item.brand,
             category: item.category,
-            weight: item.weight,
+            weight: weight,
             qty: 1,
             notes: item.notes
         )
-        addedItemName = item.name
+        addedItemName = name
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         addedItemName = nil
     }
@@ -172,12 +184,24 @@ struct CatalogItemRow: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.name)
-                    .font(.body)
-                    .fontWeight(.medium)
-                Text(item.brand)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Text(item.name)
+                        .font(.body)
+                        .fontWeight(.medium)
+                    if !item.variants.isEmpty {
+                        Text("\(item.variants.count) variant\(item.variants.count == 1 ? "" : "s")")
+                            .font(.caption2).fontWeight(.semibold)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(Color.ditherGreen.opacity(0.12))
+                            .foregroundColor(.ditherGreen)
+                            .clipShape(Capsule())
+                    }
+                }
+                if !item.brand.isEmpty {
+                    Text(item.brand)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 if !item.notes.isEmpty {
                     Text(item.notes)
                         .font(.caption)
@@ -186,11 +210,77 @@ struct CatalogItemRow: View {
                 }
             }
             Spacer()
-            if let w = item.weight {
+            if item.variants.isEmpty, let w = item.weight {
                 WeightBadge(grams: w)
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Variant Picker Sheet
+struct CatalogVariantPickerSheet: View {
+    let item: CatalogItem
+    let onSelect: (CatalogVariant) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedId: String? = nil
+
+    var body: some View {
+        NavigationStack {
+            List(item.variants) { variant in
+                Button {
+                    selectedId = variant.id
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(variant.name)
+                                .font(.body)
+                                .foregroundColor(.primary)
+                            if let w = variant.weight {
+                                Text(formatWeight(w))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Spacer()
+                        if selectedId == variant.id {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.ditherGreen)
+                        } else {
+                            Image(systemName: "circle")
+                                .foregroundColor(.secondary.opacity(0.4))
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .navigationTitle(item.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add to Locker") {
+                        if let id = selectedId,
+                           let variant = item.variants.first(where: { $0.id == id }) {
+                            onSelect(variant)
+                        }
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .tint(.ditherGreen)
+                    .disabled(selectedId == nil)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .onAppear { selectedId = item.variants.first?.id }
+    }
+
+    private func formatWeight(_ g: Double) -> String {
+        g >= 1000 ? String(format: "%.2f kg", g / 1000) : "\(Int(g)) g"
     }
 }
 

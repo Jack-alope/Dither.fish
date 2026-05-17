@@ -1771,3 +1771,168 @@ main {
   .lp-cta-strip { padding: 2.5rem 1.25rem; }
   .lp-cta-strip-inner { flex-direction: column; align-items: flex-start; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   VARIANTS
+   ═══════════════════════════════════════════════════════ */
+
+/* Badge in catalog row */
+.variant-count-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 0.1rem 0.45rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Variant picker overlay */
+.variant-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.15s ease;
+}
+.variant-overlay.hidden { display: none; }
+
+.variant-modal {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  width: 100%;
+  max-width: 360px;
+  overflow: hidden;
+  animation: modalIn 0.18s ease;
+}
+.variant-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.1rem 1.25rem 0.6rem;
+}
+.variant-modal-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.variant-modal-brand {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.variant-modal-close {
+  background: #f5f5f5;
+  border: none;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #666; flex-shrink: 0;
+  transition: background 0.15s;
+}
+.variant-modal-close:hover { background: #ebebeb; }
+.variant-modal-sub {
+  padding: 0 1.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.variant-list {
+  padding: 0 0.75rem;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.variant-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.875rem;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.variant-option input[type="radio"] { accent-color: var(--accent); flex-shrink: 0; }
+.variant-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.variant-option-name { flex: 1; font-size: 0.9rem; font-weight: 500; }
+.variant-option-weight { font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+.variant-modal-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 0.75rem;
+}
+.variant-add-btn { width: 100%; justify-content: center; }
+
+/* Admin: variants section in edit modal */
+.variants-section {
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.variants-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.75rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.variants-label { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.variants-hint { font-weight: 400; color: var(--text-muted); margin-left: 0.3rem; }
+.btn-add-variant {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 5px;
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.btn-add-variant:hover { background: #d0ecdb; }
+
+#form-variants-list { padding: 0.4rem 0.5rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.variant-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.variant-row-name {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+.variant-row-weight {
+  width: 90px;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+.variant-row-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.variant-row-remove:hover { color: var(--danger); background: #fff0f0; }
