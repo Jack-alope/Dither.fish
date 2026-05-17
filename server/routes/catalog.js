@@ -46,11 +46,15 @@ router.post('/suggest', auth, async (req, res) => {
 // Edit any catalog item (pending or approved) — admin only
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { name, brand, category, weight, notes } = req.body;
+    const { name, brand, category, weight, notes, variants } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+    const cleanVariants = Array.isArray(variants)
+      ? variants.map(v => ({ name: String(v.name ?? '').trim(), weight: v.weight ?? null })).filter(v => v.name)
+      : [];
     const item = await CatalogItem.findByIdAndUpdate(
       req.params.id,
-      { name: name.trim(), brand: brand?.trim() || '', category: category?.trim() || '', weight: weight ?? null, notes: notes?.trim() || '' },
+      { name: name.trim(), brand: brand?.trim() || '', category: category?.trim() || '',
+        weight: weight ?? null, notes: notes?.trim() || '', variants: cleanVariants },
       { new: true }
     );
     if (!item) return res.status(404).json({ error: 'Not found' });
