@@ -14,6 +14,7 @@ class AppState: ObservableObject {
 
     @Published var isAdmin: Bool = false
     @Published var username: String = ""
+    @Published var email: String = ""
     @Published var isLoading: Bool = false
     @Published var error: String?
 
@@ -29,6 +30,7 @@ class AppState: ObservableObject {
     private let tripsKey       = "dither_trips"
     private let catalogKey     = "dither_catalog"
     private let usernameKey    = "dither_username"
+    private let emailKey       = "dither_email"
     private let isAdminKey     = "dither_isAdmin"
     private let pendingOpsKey  = "dither_pendingOps"
 
@@ -52,6 +54,7 @@ class AppState: ObservableObject {
     init() {
         APIService.shared.token = token
         username = UserDefaults.standard.string(forKey: usernameKey) ?? ""
+        email    = UserDefaults.standard.string(forKey: emailKey)    ?? ""
         isAdmin  = UserDefaults.standard.bool(forKey: isAdminKey)
         pendingOps = loadPendingOps()
         loadCache()
@@ -399,36 +402,62 @@ class AppState: ObservableObject {
 
     // MARK: - Auth
 
-    func login(username: String, password: String) async throws {
-        let resp = try await APIService.shared.login(username: username, password: password)
-        token = resp.token
-        self.username = resp.username
-        self.isAdmin  = resp.isAdmin
-        UserDefaults.standard.set(resp.username, forKey: usernameKey)
-        UserDefaults.standard.set(resp.isAdmin,  forKey: isAdminKey)
-        await fetchAll()
+    /// Step 1 login — identifier is username or email. Returns (maskedEmail, resolvedUsername).
+    func requestOTPLogin(identifier: String) async throws -> (maskedEmail: String, resolvedUsername: String) {
+        let resp = try await APIService.shared.requestOTPLogin(identifier: identifier)
+        return (resp.maskedEmail, resp.username)
     }
 
-    func register(username: String, password: String) async throws {
-        let resp = try await APIService.shared.register(username: username, password: password)
+    /// Step 1 register — requires username + email. Returns (maskedEmail, resolvedUsername).
+    func requestOTPRegister(username: String, email: String) async throws -> (maskedEmail: String, resolvedUsername: String) {
+        let resp = try await APIService.shared.requestOTPRegister(username: username, email: email)
+        return (resp.maskedEmail, resp.username)
+    }
+
+    /// Step 2 — verifies code and logs in.
+    func verifyOTP(username: String, code: String) async throws {
+        let resp = try await APIService.shared.verifyOTP(username: username, code: code)
         token = resp.token
         self.username = resp.username
         self.isAdmin  = resp.isAdmin
         UserDefaults.standard.set(resp.username, forKey: usernameKey)
         UserDefaults.standard.set(resp.isAdmin,  forKey: isAdminKey)
         await fetchAll()
+        await refreshMe()
+    }
+
+    func refreshMe() async {
+        guard let me = try? await APIService.shared.fetchMe() else { return }
+        email = me.email ?? ""
+        UserDefaults.standard.set(email, forKey: emailKey)
+    }
+
+    func changeUsername(to newUsername: String) async throws {
+        let resp = try await APIService.shared.changeUsername(newUsername: newUsername)
+        token = resp.token
+        self.username = resp.username
+        self.isAdmin  = resp.isAdmin
+        UserDefaults.standard.set(resp.username, forKey: usernameKey)
+        UserDefaults.standard.set(resp.isAdmin,  forKey: isAdminKey)
+    }
+
+    func changeEmail(to newEmail: String) async throws {
+        try await APIService.shared.changeEmail(newEmail: newEmail)
+        email = newEmail.trimmingCharacters(in: .whitespaces).lowercased()
+        UserDefaults.standard.set(email, forKey: emailKey)
     }
 
     func logout() {
         token    = nil
         username = ""
+        email    = ""
         isAdmin  = false
         gear    = []
         bundles = []
         trips   = []
         catalog = []
         pendingOps = []
-        for key in [tokenKey, gearKey, bundlesKey, tripsKey, catalogKey, usernameKey, isAdminKey, pendingOpsKey] {
+        for key in [tokenKey, gearKey, bundlesKey, tripsKey, catalogKey, usernameKey, emailKey, isAdminKey, pendingOpsKey] {
             UserDefaults.standard.removeObject(forKey: key)
         }
     }

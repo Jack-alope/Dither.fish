@@ -149,19 +149,43 @@
         <button class="auth-tab" data-tab="register">Create account</button>
       </div>
 
+      <!-- LOGIN — Step 1: username or email -->
       <form id="form-login" class="auth-form" autocomplete="off">
-        <label>Username <input type="text" name="username" required autocomplete="username" /></label>
-        <label>Password <input type="password" name="password" required autocomplete="current-password" /></label>
-        <p class="auth-error hidden" id="login-error"></p>
-        <button type="submit" class="btn-primary btn-full">Sign in</button>
+        <div id="login-step1">
+          <label>Username or email <input type="text" name="login" required autocomplete="username" /></label>
+          <p class="auth-error hidden" id="login-error"></p>
+          <button type="submit" class="btn-primary btn-full">Send code</button>
+        </div>
+        <div id="login-step2" class="hidden">
+          <p class="auth-hint" id="login-hint"></p>
+          <label>6-digit code
+            <input type="text" name="code" inputmode="numeric" maxlength="6"
+                   autocomplete="one-time-code" placeholder="000000" class="auth-code-input" />
+          </label>
+          <p class="auth-error hidden" id="login-code-error"></p>
+          <button type="submit" class="btn-primary btn-full">Sign in</button>
+          <button type="button" class="btn-text-subtle" id="login-back">← Use a different email</button>
+        </div>
       </form>
 
+      <!-- REGISTER — Step 1: username + email -->
       <form id="form-register" class="auth-form hidden" autocomplete="off">
-        <label>Username <input type="text" name="username" required autocomplete="username" /></label>
-        <label>Password <input type="password" name="password" required autocomplete="new-password" /></label>
-        <label>Confirm password <input type="password" name="confirm" required autocomplete="new-password" /></label>
-        <p class="auth-error hidden" id="register-error"></p>
-        <button type="submit" class="btn-primary btn-full">Create account</button>
+        <div id="register-step1">
+          <label>Username <input type="text" name="username" required autocomplete="username" /></label>
+          <label>Email <input type="email" name="email" required autocomplete="email" /></label>
+          <p class="auth-error hidden" id="register-error"></p>
+          <button type="submit" class="btn-primary btn-full">Send code</button>
+        </div>
+        <div id="register-step2" class="hidden">
+          <p class="auth-hint" id="register-hint"></p>
+          <label>6-digit code
+            <input type="text" name="code" inputmode="numeric" maxlength="6"
+                   autocomplete="one-time-code" placeholder="000000" class="auth-code-input" />
+          </label>
+          <p class="auth-error hidden" id="register-code-error"></p>
+          <button type="submit" class="btn-primary btn-full">Create account</button>
+          <button type="button" class="btn-text-subtle" id="register-back">← Use a different email</button>
+        </div>
       </form>
     </div>
   </div>
@@ -402,7 +426,14 @@
       <div id="note-popup-name" class="note-popup-name"></div>
       <div id="note-popup-meta" class="note-popup-meta"></div>
     </div>
-    <p id="note-popup-text"></p>
+    <div id="note-popup-body" class="note-popup-body">
+      <div id="note-popup-stats" class="note-popup-stats"></div>
+      <div id="note-popup-notes" class="note-popup-notes"></div>
+      <div id="note-popup-variants" class="note-popup-variants hidden">
+        <div class="note-popup-section-label">Variants</div>
+        <div id="note-popup-variants-list"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ───── VARIANT PICKER ───── -->
@@ -445,8 +476,32 @@
             <div class="settings-avatar" id="settings-avatar"></div>
             <div>
               <div class="settings-username" id="settings-username-display"></div>
+              <div class="settings-email-display" id="settings-email-display"></div>
               <div class="settings-admin-badge hidden" id="settings-admin-badge">Admin</div>
             </div>
+          </div>
+
+          <!-- Change username -->
+          <div class="settings-field-row">
+            <label class="settings-field-label">Username</label>
+            <div class="settings-field-inline">
+              <input type="text" id="settings-new-username" class="settings-field-input"
+                     placeholder="New username" autocomplete="off" autocorrect="off"
+                     autocapitalize="none" spellcheck="false" />
+              <button class="settings-field-btn settings-field-btn--subtle" id="btn-change-username">Save</button>
+            </div>
+            <p class="settings-field-msg hidden" id="settings-username-msg"></p>
+          </div>
+
+          <!-- Change email -->
+          <div class="settings-field-row">
+            <label class="settings-field-label">Email</label>
+            <div class="settings-field-inline">
+              <input type="email" id="settings-new-email" class="settings-field-input"
+                     placeholder="New email address" autocomplete="off" />
+              <button class="settings-field-btn settings-field-btn--subtle" id="btn-change-email">Save</button>
+            </div>
+            <p class="settings-field-msg hidden" id="settings-email-msg"></p>
           </div>
         </section>
 

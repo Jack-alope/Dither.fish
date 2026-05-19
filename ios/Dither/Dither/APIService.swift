@@ -127,21 +127,49 @@ class APIService {
         try await requestVoid(path, method: "DELETE")
     }
 
-    // MARK: - Auth
-    func login(username: String, password: String) async throws -> AuthResponse {
-        struct LoginBody: Encodable {
-            let username: String
-            let password: String
-        }
-        return try await post("/api/auth/login", body: LoginBody(username: username, password: password))
+    // MARK: - Auth (passwordless OTP)
+
+    struct OtpRequestResponse: Decodable {
+        let sent: Bool
+        let maskedEmail: String
+        let username: String
     }
 
-    func register(username: String, password: String) async throws -> AuthResponse {
-        struct RegisterBody: Encodable {
-            let username: String
-            let password: String
-        }
-        return try await post("/api/auth/register", body: RegisterBody(username: username, password: password))
+    struct MeResponse: Decodable {
+        let username: String
+        let email: String?
+        let isAdmin: Bool
+    }
+
+    func fetchMe() async throws -> MeResponse {
+        try await get("/api/auth/me")
+    }
+
+    /// Login — identifier is username or email
+    func requestOTPLogin(identifier: String) async throws -> OtpRequestResponse {
+        struct Body: Encodable { let login: String }
+        return try await post("/api/auth/request-otp", body: Body(login: identifier))
+    }
+
+    /// Register — requires both username and email
+    func requestOTPRegister(username: String, email: String) async throws -> OtpRequestResponse {
+        struct Body: Encodable { let username: String; let email: String }
+        return try await post("/api/auth/request-otp", body: Body(username: username, email: email))
+    }
+
+    func verifyOTP(username: String, code: String) async throws -> AuthResponse {
+        struct Body: Encodable { let username: String; let code: String }
+        return try await post("/api/auth/verify-otp", body: Body(username: username, code: code))
+    }
+
+    func changeUsername(newUsername: String) async throws -> AuthResponse {
+        struct Body: Encodable { let newUsername: String }
+        return try await put("/api/auth/username", body: Body(newUsername: newUsername))
+    }
+
+    func changeEmail(newEmail: String) async throws {
+        struct Body: Encodable { let newEmail: String }
+        let _: OkResult = try await put("/api/auth/email", body: Body(newEmail: newEmail))
     }
 
     // MARK: - Gear
