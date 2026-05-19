@@ -76,6 +76,17 @@ function showAuth(defaultTab = 'login') {
   landingScreen.classList.add('hidden');
   authScreen.classList.remove('hidden');
   appEl.classList.add('hidden');
+  // Reset all forms to step 1
+  ['login', 'register'].forEach(tab => {
+    const step1 = document.getElementById(`${tab}-step1`);
+    const step2 = document.getElementById(`${tab}-step2`);
+    if (step1) step1.classList.remove('hidden');
+    if (step2) step2.classList.add('hidden');
+    const errEl1 = document.getElementById(`${tab}-error`);
+    const errEl2 = document.getElementById(`${tab}-code-error`);
+    if (errEl1) errEl1.classList.add('hidden');
+    if (errEl2) errEl2.classList.add('hidden');
+  });
   // Switch to the requested tab
   document.querySelectorAll('.auth-tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === defaultTab);
@@ -166,60 +177,102 @@ document.querySelectorAll('.auth-tab').forEach(tab => {
   });
 });
 
-// Login
-document.getElementById('form-login').addEventListener('submit', async e => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const errEl = document.getElementById('login-error');
-  errEl.classList.add('hidden');
-  try {
-    const data = await api('/auth/login', {
-      method: 'POST',
-      body: { username: fd.get('username'), password: fd.get('password') },
-    });
-    if (!data) return;
-    authToken = data.token;
-    currentUsername = data.username;
-    currentIsAdmin  = !!data.isAdmin;
-    localStorage.setItem('lp_token', authToken);
-    localStorage.setItem('lp_username', currentUsername);
-    localStorage.setItem('lp_isAdmin', currentIsAdmin);
-    showApp();
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.classList.remove('hidden');
-  }
-});
+// ── Username validation ───────────────────────────────────────────────────────
+const USERNAME_RE = /^[a-z0-9_-]{3,30}$/;
+function validateUsername(value) {
+  if (!USERNAME_RE.test(value.trim().toLowerCase()))
+    return 'Username must be 3–30 characters: letters, numbers, hyphens and underscores only';
+  return null;
+}
 
-// Register
-document.getElementById('form-register').addEventListener('submit', async e => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const errEl = document.getElementById('register-error');
-  errEl.classList.add('hidden');
-  if (fd.get('password') !== fd.get('confirm')) {
-    errEl.textContent = 'Passwords do not match';
-    errEl.classList.remove('hidden');
-    return;
-  }
-  try {
-    const data = await api('/auth/register', {
-      method: 'POST',
-      body: { username: fd.get('username'), password: fd.get('password') },
-    });
-    if (!data) return;
-    authToken = data.token;
-    currentUsername = data.username;
-    currentIsAdmin  = !!data.isAdmin;
-    localStorage.setItem('lp_token', authToken);
-    localStorage.setItem('lp_username', currentUsername);
-    localStorage.setItem('lp_isAdmin', currentIsAdmin);
-    showApp();
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.classList.remove('hidden');
-  }
-});
+// ── OTP auth helpers ─────────────────────────────────────────────────────────
+
+function setupOtpForm(tab) {
+  // tab = 'login' | 'register'
+  const form     = document.getElementById(`form-${tab}`);
+  const step1    = document.getElementById(`${tab}-step1`);
+  const step2    = document.getElementById(`${tab}-step2`);
+  const errEl1   = document.getElementById(`${tab}-error`);
+  const errEl2   = document.getElementById(`${tab}-code-error`);
+  const hintEl   = document.getElementById(`${tab}-hint`);
+  const backBtn  = document.getElementById(`${tab}-back`);
+
+  let pendingUsername = '';
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(form);
+
+    // Step 1 → send code
+    if (!step1.classList.contains('hidden')) {
+      errEl1.classList.add('hidden');
+      const btn = step1.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      try {
+        const isLogin = tab === 'login';
+        if (!isLogin) {
+          const usernameErr = validateUsername(fd.get('username') || '');
+          if (usernameErr) { errEl1.textContent = usernameErr; errEl1.classList.remove('hidden'); return; }
+        }
+        const body = isLogin
+          ? { login: fd.get('login') }
+          : { username: fd.get('username'), email: fd.get('email') };
+        const data = await api('/auth/request-otp', { method: 'POST', body });
+        if (!data) return;
+        pendingUsername = data.username || fd.get('username')?.trim() || '';
+        hintEl.textContent = `Code sent to ${data.maskedEmail} — check your inbox.`;
+        step1.classList.add('hidden');
+        step2.classList.remove('hidden');
+        step2.querySelector('input[name=code]').value = '';
+        step2.querySelector('input[name=code]').focus();
+      } catch (err) {
+        errEl1.textContent = err.message;
+        errEl1.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send code';
+      }
+      return;
+    }
+
+    // Step 2 → verify code
+    errEl2.classList.add('hidden');
+    const btn = step2.querySelector('button[type=submit]');
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    try {
+      const data = await api('/auth/verify-otp', {
+        method: 'POST',
+        body: { username: pendingUsername, code: fd.get('code').trim() },
+      });
+      if (!data) return;
+      authToken       = data.token;
+      currentUsername = data.username;
+      currentIsAdmin  = !!data.isAdmin;
+      localStorage.setItem('lp_token',    authToken);
+      localStorage.setItem('lp_username', currentUsername);
+      localStorage.setItem('lp_isAdmin',  currentIsAdmin);
+      showApp();
+    } catch (err) {
+      errEl2.textContent = err.message;
+      errEl2.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = tab === 'login' ? 'Sign in' : 'Create account';
+    }
+  });
+
+  backBtn.addEventListener('click', () => {
+    step2.classList.add('hidden');
+    step1.classList.remove('hidden');
+    errEl2.classList.add('hidden');
+    step1.querySelector('input[name=username]').focus();
+  });
+}
+
+setupOtpForm('login');
+setupOtpForm('register');
 
 function logout() {
   authToken = null;
@@ -260,21 +313,100 @@ document.addEventListener('keydown', e => {
 // ── Settings modal ───────────────────────────────────────────────────────────
 const settingsOverlay = document.getElementById('settings-overlay');
 
-function openSettings() {
+async function openSettings() {
   closeUserMenu();
   const uname = currentUsername || '';
   document.getElementById('settings-avatar').textContent = uname.charAt(0).toUpperCase();
   document.getElementById('settings-username-display').textContent = uname;
+  document.getElementById('settings-email-display').textContent = '';
   const badge = document.getElementById('settings-admin-badge');
   if (currentIsAdmin) badge.classList.remove('hidden');
   else badge.classList.add('hidden');
+  // Reset change fields
+  document.getElementById('settings-new-username').value = '';
+  document.getElementById('settings-new-email').value = '';
+  ['settings-username-msg', 'settings-email-msg'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.add('hidden');
+    el.className = 'settings-field-msg hidden';
+  });
   settingsOverlay.classList.remove('hidden');
   document.getElementById('btn-close-settings').focus();
+  // Load current email
+  try {
+    const me = await api('/auth/me');
+    if (me?.email) {
+      document.getElementById('settings-email-display').textContent = me.email;
+      document.getElementById('settings-new-email').placeholder = me.email;
+    }
+    if (me?.username) {
+      document.getElementById('settings-new-username').placeholder = me.username;
+    }
+  } catch (_) {}
 }
 
 function closeSettings() {
   settingsOverlay.classList.add('hidden');
 }
+
+function showFieldMsg(id, text, isError) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = `settings-field-msg ${isError ? 'error' : 'success'}`;
+  el.classList.remove('hidden');
+}
+
+document.getElementById('btn-change-username').addEventListener('click', async () => {
+  const input = document.getElementById('settings-new-username');
+  const newUsername = input.value.trim();
+  if (!newUsername) return;
+  const usernameErr = validateUsername(newUsername);
+  if (usernameErr) { showFieldMsg('settings-username-msg', usernameErr, true); return; }
+  const btn = document.getElementById('btn-change-username');
+  btn.disabled = true;
+  try {
+    const data = await api('/auth/username', { method: 'PUT', body: { newUsername } });
+    if (!data) return;
+    authToken       = data.token;
+    currentUsername = data.username;
+    currentIsAdmin  = !!data.isAdmin;
+    localStorage.setItem('lp_token',    authToken);
+    localStorage.setItem('lp_username', currentUsername);
+    localStorage.setItem('lp_isAdmin',  currentIsAdmin);
+    document.getElementById('settings-username-display').textContent = currentUsername;
+    document.getElementById('settings-avatar').textContent = currentUsername.charAt(0).toUpperCase();
+    document.getElementById('header-username').textContent = currentUsername;
+    input.value = '';
+    input.placeholder = currentUsername;
+    document.getElementById('settings-new-username').placeholder = currentUsername;
+    showFieldMsg('settings-username-msg', `Username updated to "${currentUsername}"`, false);
+  } catch (err) {
+    showFieldMsg('settings-username-msg', err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('btn-change-email').addEventListener('click', async () => {
+  const input = document.getElementById('settings-new-email');
+  const newEmail = input.value.trim();
+  if (!newEmail) return;
+  const btn = document.getElementById('btn-change-email');
+  btn.disabled = true;
+  try {
+    const data = await api('/auth/email', { method: 'PUT', body: { newEmail } });
+    input.value = '';
+    if (data?.email) {
+      document.getElementById('settings-email-display').textContent = data.email;
+      input.placeholder = data.email;
+    }
+    showFieldMsg('settings-email-msg', 'Email updated', false);
+  } catch (err) {
+    showFieldMsg('settings-email-msg', err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById('btn-open-settings').addEventListener('click', openSettings);
 document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
@@ -332,20 +464,82 @@ function buildWeightChart(byCategory) {
     <div class="chart-legend">${legend}</div>`;
 }
 
-// ── Notes popup ──────────────────────────────────────────────────────────────
+// ── Gear info card popup ──────────────────────────────────────────────────────
 const notePopup     = document.getElementById('note-popup');
-const notePopupText = document.getElementById('note-popup-text');
 const notePopupName = document.getElementById('note-popup-name');
 const notePopupMeta = document.getElementById('note-popup-meta');
+const notePopupStats    = document.getElementById('note-popup-stats');
+const notePopupNotes    = document.getElementById('note-popup-notes');
+const notePopupVariants = document.getElementById('note-popup-variants');
+const notePopupVariantsList = document.getElementById('note-popup-variants-list');
+
 document.getElementById('note-popup-close').addEventListener('click', () => notePopup.classList.add('hidden'));
+
+function openGearCard(trigger) {
+  const name     = trigger.dataset.itemName    || '';
+  const brand    = trigger.dataset.itemBrand   || '';
+  const category = trigger.dataset.itemCategory || '';
+  const weight   = trigger.dataset.itemWeight;
+  const qty      = trigger.dataset.itemQty;
+  const note     = trigger.dataset.note        || '';
+
+  // Header
+  notePopupName.textContent = name;
+  const metaParts = [brand, category].filter(Boolean);
+  notePopupMeta.textContent = metaParts.join(' · ');
+  notePopupMeta.style.display = metaParts.length ? '' : 'none';
+
+  // Stat pills
+  const stats = [];
+  if (weight !== '' && weight != null) stats.push({ label: 'Weight', value: `${weight}g` });
+  if (qty)                              stats.push({ label: 'Qty',    value: qty });
+  notePopupStats.innerHTML = stats.map(s =>
+    `<div class="note-popup-stat">
+       <span class="note-popup-stat-label">${s.label}</span>
+       <span class="note-popup-stat-value">${esc(String(s.value))}</span>
+     </div>`
+  ).join('');
+
+  // Notes
+  notePopupNotes.textContent = note;
+
+  // Variants — use direct catalog ID if present, else look up by name
+  const catId    = trigger.dataset.catalogId;
+  const baseName = name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+  const catMatch = catId
+    ? catalog.find(c => c._id === catId)
+    : catalog.find(c =>
+        c.name.toLowerCase() === baseName &&
+        (!brand || c.brand.toLowerCase() === brand.toLowerCase())
+      ) || catalog.find(c => c.name.toLowerCase() === baseName);
+
+  if (catMatch?.variants?.length) {
+    notePopupVariantsList.innerHTML = catMatch.variants.map(v =>
+      `<div class="note-popup-variant-row">
+         <span>${esc(v.name)}</span>
+         <span class="note-popup-variant-weight">${v.weight != null ? v.weight + 'g' : '—'}</span>
+       </div>`
+    ).join('');
+    notePopupVariants.classList.remove('hidden');
+  } else {
+    notePopupVariants.classList.add('hidden');
+  }
+
+  notePopup.classList.remove('hidden');
+}
+
 document.addEventListener('click', e => {
-  const trigger = e.target.closest('.note-icon-btn, .item-name-link');
-  if (trigger) {
-    notePopupName.textContent = trigger.dataset.itemName || '';
-    notePopupMeta.textContent = [trigger.dataset.itemBrand, trigger.dataset.itemWeight].filter(Boolean).join(' · ');
-    notePopupName.style.display = trigger.dataset.itemName ? '' : 'none';
+  const trigger = e.target.closest('.item-name-link');
+  if (trigger) { openGearCard(trigger); return; }
+  // legacy note-icon-btn (used in trip pack views)
+  const iconBtn = e.target.closest('.note-icon-btn');
+  if (iconBtn) {
+    notePopupName.textContent = iconBtn.dataset.itemName || '';
+    notePopupMeta.textContent = [iconBtn.dataset.itemBrand, iconBtn.dataset.itemWeight ? iconBtn.dataset.itemWeight + 'g' : ''].filter(Boolean).join(' · ');
     notePopupMeta.style.display = notePopupMeta.textContent ? '' : 'none';
-    notePopupText.textContent = trigger.dataset.note;
+    notePopupStats.innerHTML = '';
+    notePopupNotes.textContent = iconBtn.dataset.note || '';
+    notePopupVariants.classList.add('hidden');
     notePopup.classList.remove('hidden');
     return;
   }
@@ -454,7 +648,15 @@ function renderGear() {
           ${items.map(g => `
             <tr>
               <td>
-                <strong ${g.notes ? `class="item-name-link" data-note="${esc(g.notes)}" data-item-name="${esc(g.name)}" data-item-brand="${esc(g.brand || '')}" data-item-weight="${g.weight != null ? g.weight + 'g' : ''}" title="Click to view notes"` : ''}>${esc(g.name)}</strong>
+                <strong class="item-name-link"
+                  data-gear-id="${g.id}"
+                  data-item-name="${esc(g.name)}"
+                  data-item-brand="${esc(g.brand || '')}"
+                  data-item-category="${esc(g.category || '')}"
+                  data-item-weight="${g.weight != null ? g.weight : ''}"
+                  data-item-qty="${g.qty ?? 1}"
+                  data-note="${esc(g.notes || '')}"
+                >${esc(g.name)}</strong>
                 ${(g.brand || g.weight != null) ? `<div class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
               </td>
               <td style="text-align:right">${g.qty ?? 1}</td>
@@ -1615,7 +1817,15 @@ function renderCatalog() {
             <tr>
               <td>
                 <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
-                  <strong ${c.notes ? `class="item-name-link" data-note="${esc(c.notes)}" data-item-name="${esc(c.name)}" data-item-brand="${esc(c.brand || '')}" data-item-weight="${c.weight != null ? c.weight + 'g' : ''}" title="Click to view notes"` : ''}>${esc(c.name)}</strong>
+                  <strong class="item-name-link"
+                    data-item-name="${esc(c.name)}"
+                    data-item-brand="${esc(c.brand || '')}"
+                    data-item-category="${esc(c.category || '')}"
+                    data-item-weight="${c.weight != null ? c.weight : ''}"
+                    data-item-qty=""
+                    data-note="${esc(c.notes || '')}"
+                    data-catalog-id="${c._id}"
+                  >${esc(c.name)}</strong>
                   ${(c.variants && c.variants.length > 0) ? `<span class="variant-count-badge">${c.variants.length} variant${c.variants.length !== 1 ? 's' : ''}</span>` : ''}
                 </div>
                 ${(c.brand || c.weight != null) ? `<div class="item-brand">${[c.brand, c.weight != null ? `${c.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
@@ -1636,6 +1846,9 @@ function renderCatalog() {
 }
 
 catalogContainer.addEventListener('click', async e => {
+  // Don't trigger add-to-locker when the name link was clicked (opens info card instead)
+  if (e.target.closest('.item-name-link')) return;
+
   const catalogId    = e.target.closest('[data-catalog-id]')?.dataset.catalogId;
   const editId       = e.target.closest('[data-catalog-edit]')?.dataset.catalogEdit;
   const deleteId     = e.target.closest('[data-catalog-delete]')?.dataset.catalogDelete;
