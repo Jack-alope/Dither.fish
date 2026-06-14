@@ -281,6 +281,7 @@
           <div class="view-header">
             <h2 id="trip-detail-name"></h2>
             <div class="trip-actions">
+              <button class="btn-primary" id="btn-open-picker">+ Add Gear</button>
               <button class="btn-secondary" id="btn-edit-trip">Edit</button>
               <button class="btn-secondary" id="btn-archive-trip">Archive</button>
               <button class="btn-danger" id="btn-delete-trip">Delete Trip</button>
@@ -294,13 +295,21 @@
               <div id="pack-tabs-area"></div>
               <div id="pack-body-area"></div>
             </div>
-            <div class="gear-picker-column">
-              <div id="picker-bundles-section"></div>
+          </div>
+
+          <!-- Add-gear drawer -->
+          <div class="picker-backdrop hidden" id="picker-backdrop"></div>
+          <aside class="gear-picker-drawer" id="gear-picker-drawer" aria-hidden="true">
+            <div class="picker-drawer-header">
               <h3>Add from Gear Locker</h3>
+              <button class="picker-drawer-close" id="btn-close-picker" title="Close">✕</button>
+            </div>
+            <div class="picker-drawer-body">
+              <div id="picker-bundles-section"></div>
               <input type="text" id="picker-search" placeholder="Search gear…" />
               <ul class="picker-list" id="picker-list"></ul>
             </div>
-          </div>
+          </aside>
         </div>
       </section>
 

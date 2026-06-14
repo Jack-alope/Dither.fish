@@ -613,7 +613,7 @@ function renderGear() {
   const q   = gearSearch.value.toLowerCase();
   const cat = catFilter.value;
   const filtered = gear.filter(g =>
-    (!q   || g.name.toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
+    (!q   || g.name.toLowerCase().includes(q) || (g.brand || '').toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
     (!cat || g.category === cat)
   );
   gearEmpty.style.display = filtered.length ? 'none' : 'block';
@@ -648,16 +648,18 @@ function renderGear() {
           ${items.map(g => `
             <tr>
               <td>
-                <strong class="item-name-link"
-                  data-gear-id="${g.id}"
-                  data-item-name="${esc(g.name)}"
-                  data-item-brand="${esc(g.brand || '')}"
-                  data-item-category="${esc(g.category || '')}"
-                  data-item-weight="${g.weight != null ? g.weight : ''}"
-                  data-item-qty="${g.qty ?? 1}"
-                  data-note="${esc(g.notes || '')}"
-                >${esc(g.name)}</strong>
-                ${(g.brand || g.weight != null) ? `<div class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
+                <div class="item-name-cell">
+                  <strong class="item-name-link"
+                    data-gear-id="${g.id}"
+                    data-item-name="${esc(g.name)}"
+                    data-item-brand="${esc(g.brand || '')}"
+                    data-item-category="${esc(g.category || '')}"
+                    data-item-weight="${g.weight != null ? g.weight : ''}"
+                    data-item-qty="${g.qty ?? 1}"
+                    data-note="${esc(g.notes || '')}"
+                  >${esc(g.name)}</strong>
+                  ${(g.brand || g.weight != null) ? `<span class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</span>` : ''}
+                </div>
               </td>
               <td style="text-align:right">${g.qty ?? 1}</td>
               <td class="col-actions">
@@ -939,6 +941,7 @@ document.getElementById('btn-archive-trip').addEventListener('click', async () =
 });
 
 function showTripList() {
+  closePicker();
   tripListPanel.classList.remove('hidden');
   tripDetailPanel.classList.add('hidden');
   currentTripId = null;
@@ -1036,9 +1039,32 @@ const packBodyArea = document.getElementById('pack-body-area');
 
 pickerSearch.addEventListener('input', renderPicker);
 
+// ── Add-gear drawer ──
+const pickerDrawer   = document.getElementById('gear-picker-drawer');
+const pickerBackdrop = document.getElementById('picker-backdrop');
+function openPicker() {
+  renderPicker();
+  pickerDrawer.classList.add('open');
+  pickerBackdrop.classList.remove('hidden');
+  pickerDrawer.setAttribute('aria-hidden', 'false');
+  pickerSearch.focus();
+}
+function closePicker() {
+  pickerDrawer.classList.remove('open');
+  pickerBackdrop.classList.add('hidden');
+  pickerDrawer.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('btn-open-picker').addEventListener('click', openPicker);
+document.getElementById('btn-close-picker').addEventListener('click', closePicker);
+pickerBackdrop.addEventListener('click', closePicker);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && pickerDrawer.classList.contains('open')) closePicker();
+});
+
 function showTripDetail(id) {
   currentTripId  = id;
   currentPackIdx = 0;
+  closePicker();
   tripListPanel.classList.add('hidden');
   tripDetailPanel.classList.remove('hidden');
   renderTripDetail();
@@ -1058,6 +1084,8 @@ function renderTripDetail() {
   const editBtn    = document.getElementById('btn-edit-trip');
   archiveBtn.textContent = trip.archived ? 'Unarchive' : 'Archive';
   editBtn.classList.toggle('hidden', !!trip.archived);
+  document.getElementById('btn-open-picker').classList.toggle('hidden', !!trip.archived);
+  if (trip.archived) closePicker();
   // Archived banner
   let bannerEl = document.getElementById('trip-archived-banner');
   if (!bannerEl) {
@@ -1143,11 +1171,10 @@ function renderPackSection(trip) {
     const itemType = p.type || 'base';
     return `
       <li class="pack-item${p.checked ? ' pack-item-checked' : ''}"${!archived ? ` draggable="true" data-drag-id="${g.id}"` : ''}>
-        ${!archived ? `<span class="drag-handle" title="Drag to cube">⠿</span>` : ''}
         <input type="checkbox" class="pack-check" data-check="${g.id}" ${p.checked ? 'checked' : ''} />
         <div class="pack-item-info">
           <div class="pack-item-name">${esc(g.name)}</div>
-          <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
+          <div class="pack-item-meta">${[g.category, g.brand, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
         </div>
         ${!archived ? `
         <div class="pack-item-qty">
@@ -1174,7 +1201,6 @@ function renderPackSection(trip) {
     return `
       <div class="pack-bundle-group${exp ? ' expanded' : ''}">
         <div class="pack-bundle-header" data-toggle-bundle="${b.id}"${!archived ? ` draggable="true" data-drag-bundle="${b.id}"` : ''}>
-          ${!archived ? `<span class="drag-handle" title="Drag to cube">⠿</span>` : ''}
           <span class="pack-bundle-chevron">${exp ? '▾' : '▸'}</span>
           <span class="pack-bundle-name">${esc(b.name)}</span>
           <span class="pack-bundle-stats">${bChecked}/${bItems.length} packed</span>
@@ -1528,7 +1554,10 @@ function renderPicker() {
   renderPickerBundles();
   const q = pickerSearch.value.toLowerCase();
   const filtered = gear.filter(g =>
-    !q || g.name.toLowerCase().includes(q) || (g.category || '').toLowerCase().includes(q)
+    !q ||
+    g.name.toLowerCase().includes(q) ||
+    (g.brand || '').toLowerCase().includes(q) ||
+    (g.notes || '').toLowerCase().includes(q)
   );
   const pack = trip.packs[currentPackIdx];
   const inPack = new Set((pack?.items || []).map(p => p.gearId));
