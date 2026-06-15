@@ -4,7 +4,7 @@
 
 **Dither.fish** is a free, open-source web and iOS app that helps you manage your gear, plan trips, and track pack weight — down to the gram.
 
-🌐 **[dither.fish](https://dither.fish)** · ☕ **[Buy me a coffee](https://buymeacoffee.com/mrph)**
+🌐 **[dither.fish](https://dither.fish)**
 
 ---
 

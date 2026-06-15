@@ -133,6 +133,10 @@ function normalizeBundle(b) {
 function normalizeTrip(t)  {
   const base = { ...t, id: t._id ?? t.id };
   base.archived     = base.archived ?? false;
+  // Route tracks: prefer the array; migrate a legacy single `track`; ensure each has an id
+  base.tracks = (Array.isArray(t.tracks) && t.tracks.length)
+    ? t.tracks.map((tk, i) => ({ ...tk, id: tk.id || `t${i}` }))
+    : (t.track && t.track.points && t.track.points.length ? [{ ...t.track, id: t.track.id || 't0' }] : []);
   base.frozenGear    = base.frozenGear    ? base.frozenGear.map(g => ({ ...g, id: g._id ?? g.id })) : null;
   base.frozenBundles = base.frozenBundles ? base.frozenBundles.map(b => ({
     ...b,
@@ -613,7 +617,7 @@ function renderGear() {
   const q   = gearSearch.value.toLowerCase();
   const cat = catFilter.value;
   const filtered = gear.filter(g =>
-    (!q   || g.name.toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
+    (!q   || g.name.toLowerCase().includes(q) || (g.brand || '').toLowerCase().includes(q) || (g.notes || '').toLowerCase().includes(q)) &&
     (!cat || g.category === cat)
   );
   gearEmpty.style.display = filtered.length ? 'none' : 'block';
@@ -648,16 +652,18 @@ function renderGear() {
           ${items.map(g => `
             <tr>
               <td>
-                <strong class="item-name-link"
-                  data-gear-id="${g.id}"
-                  data-item-name="${esc(g.name)}"
-                  data-item-brand="${esc(g.brand || '')}"
-                  data-item-category="${esc(g.category || '')}"
-                  data-item-weight="${g.weight != null ? g.weight : ''}"
-                  data-item-qty="${g.qty ?? 1}"
-                  data-note="${esc(g.notes || '')}"
-                >${esc(g.name)}</strong>
-                ${(g.brand || g.weight != null) ? `<div class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</div>` : ''}
+                <div class="item-name-cell">
+                  <strong class="item-name-link"
+                    data-gear-id="${g.id}"
+                    data-item-name="${esc(g.name)}"
+                    data-item-brand="${esc(g.brand || '')}"
+                    data-item-category="${esc(g.category || '')}"
+                    data-item-weight="${g.weight != null ? g.weight : ''}"
+                    data-item-qty="${g.qty ?? 1}"
+                    data-note="${esc(g.notes || '')}"
+                  >${esc(g.name)}</strong>
+                  ${(g.brand || g.weight != null) ? `<span class="item-brand">${[g.brand, g.weight != null && g.weight !== '' ? `${g.weight}g` : null].filter(Boolean).join(' · ')}</span>` : ''}
+                </div>
               </td>
               <td style="text-align:right">${g.qty ?? 1}</td>
               <td class="col-actions">
@@ -939,6 +945,7 @@ document.getElementById('btn-archive-trip').addEventListener('click', async () =
 });
 
 function showTripList() {
+  closePicker();
   tripListPanel.classList.remove('hidden');
   tripDetailPanel.classList.add('hidden');
   currentTripId = null;
@@ -1036,13 +1043,59 @@ const packBodyArea = document.getElementById('pack-body-area');
 
 pickerSearch.addEventListener('input', renderPicker);
 
+// ── Add-gear drawer ──
+const pickerDrawer   = document.getElementById('gear-picker-drawer');
+const pickerBackdrop = document.getElementById('picker-backdrop');
+function openPicker() {
+  renderPicker();
+  pickerDrawer.classList.add('open');
+  pickerBackdrop.classList.remove('hidden');
+  pickerDrawer.setAttribute('aria-hidden', 'false');
+  pickerSearch.focus();
+}
+function closePicker() {
+  pickerDrawer.classList.remove('open');
+  pickerBackdrop.classList.add('hidden');
+  pickerDrawer.setAttribute('aria-hidden', 'true');
+}
+document.getElementById('btn-open-picker').addEventListener('click', openPicker);
+document.getElementById('btn-close-picker').addEventListener('click', closePicker);
+pickerBackdrop.addEventListener('click', closePicker);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && pickerDrawer.classList.contains('open')) closePicker();
+});
+
 function showTripDetail(id) {
-  currentTripId  = id;
-  currentPackIdx = 0;
+  currentTripId   = id;
+  currentPackIdx  = 0;
+  currentTripPage = 'pack'; // every trip opens on the Pack page
+  hiddenTrackIds.clear();   // reset map visibility toggles per trip
+  closePicker();
   tripListPanel.classList.add('hidden');
   tripDetailPanel.classList.remove('hidden');
   renderTripDetail();
 }
+
+// ── Trip sub-pages (Pack / Route) ──
+let currentTripPage = 'pack';
+function setTripPage(page) {
+  currentTripPage = page;
+  document.getElementById('trip-page-pack').classList.toggle('hidden', page !== 'pack');
+  document.getElementById('trip-page-route').classList.toggle('hidden', page !== 'route');
+  document.querySelectorAll('.trip-subnav-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tripPage === page));
+  const trip = trips.find(t => t.id === currentTripId);
+  // "+ Add Gear" only applies to the pack page on active trips
+  document.getElementById('btn-open-picker').classList.toggle('hidden', page !== 'pack' || !!trip?.archived);
+  if (page === 'route') {
+    closePicker();
+    if (trip) renderRoute(trip); // re-render so the map sizes correctly now it's visible
+  }
+}
+document.querySelector('.trip-subnav').addEventListener('click', e => {
+  const btn = e.target.closest('[data-trip-page]');
+  if (btn) setTripPage(btn.dataset.tripPage);
+});
 
 function renderTripDetail() {
   const trip = trips.find(t => t.id === currentTripId);
@@ -1058,6 +1111,7 @@ function renderTripDetail() {
   const editBtn    = document.getElementById('btn-edit-trip');
   archiveBtn.textContent = trip.archived ? 'Unarchive' : 'Archive';
   editBtn.classList.toggle('hidden', !!trip.archived);
+  if (trip.archived) closePicker();
   // Archived banner
   let bannerEl = document.getElementById('trip-archived-banner');
   if (!bannerEl) {
@@ -1073,6 +1127,382 @@ function renderTripDetail() {
   if (currentPackIdx >= packs.length) currentPackIdx = Math.max(0, packs.length - 1);
   renderPackSection(trip);
   renderPicker();
+  renderRoute(trip);
+  renderRouteNotes(trip);
+  setTripPage(currentTripPage);
+}
+
+// ── Trip route / GPX ─────────────────────────────────────────────────────────
+let tripMap = null;
+let trackLayer = null;
+const hiddenTrackIds = new Set(); // tracks toggled off the map (view state, not persisted)
+
+const MAX_TRACK_POINTS = 2000;
+
+function haversine(a, b) {
+  const R = 6371000; // metres
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(b[0] - a[0]);
+  const dLon = toRad(b[1] - a[1]);
+  const lat1 = toRad(a[0]), lat2 = toRad(b[0]);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function parseGpx(text, fallbackName) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('Could not read that GPX file.');
+  // Prefer track points; fall back to route points
+  let nodes = [...doc.getElementsByTagName('trkpt')];
+  if (!nodes.length) nodes = [...doc.getElementsByTagName('rtept')];
+  if (!nodes.length) throw new Error('No track points found in that GPX file.');
+
+  const raw = nodes.map(n => {
+    const lat = parseFloat(n.getAttribute('lat'));
+    const lon = parseFloat(n.getAttribute('lon'));
+    const eleEl = n.getElementsByTagName('ele')[0];
+    const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+    return [lat, lon, Number.isFinite(ele) ? ele : null];
+  }).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+  if (!raw.length) throw new Error('No valid coordinates in that GPX file.');
+
+  // Stats from full-resolution data
+  let distance = 0, ascent = 0;
+  for (let i = 1; i < raw.length; i++) {
+    distance += haversine(raw[i - 1], raw[i]);
+    const e0 = raw[i - 1][2], e1 = raw[i][2];
+    if (Number.isFinite(e0) && Number.isFinite(e1) && e1 > e0) ascent += e1 - e0;
+  }
+
+  // Bounds
+  let minLat = Infinity, minLon = Infinity, maxLat = -Infinity, maxLon = -Infinity;
+  raw.forEach(([la, lo]) => {
+    if (la < minLat) minLat = la; if (la > maxLat) maxLat = la;
+    if (lo < minLon) minLon = lo; if (lo > maxLon) maxLon = lo;
+  });
+
+  // Downsample (keep first & last) and round to keep the payload small
+  const stride = Math.max(1, Math.ceil(raw.length / MAX_TRACK_POINTS));
+  const points = [];
+  for (let i = 0; i < raw.length; i += stride) points.push(raw[i]);
+  if (points[points.length - 1] !== raw[raw.length - 1]) points.push(raw[raw.length - 1]);
+  const round = points.map(([la, lo, el]) => [
+    Math.round(la * 1e5) / 1e5,
+    Math.round(lo * 1e5) / 1e5,
+    Number.isFinite(el) ? Math.round(el) : null,
+  ]);
+
+  const nameEl = doc.querySelector('trk > name, rte > name, metadata > name');
+  return {
+    name: (nameEl?.textContent || fallbackName || '').trim(),
+    points: round,
+    distance: Math.round(distance),
+    ascent: Math.round(ascent),
+    bounds: [minLat, minLon, maxLat, maxLon],
+  };
+}
+
+const TRACK_COLORS = ['#2d6a4f', '#1d4ed8', '#c026d3', '#b45309', '#0891b2', '#b00020', '#7c3aed', '#15803d'];
+const trackColor = i => TRACK_COLORS[i % TRACK_COLORS.length];
+const newTrackId = () => (self.crypto?.randomUUID?.() || `t${Date.now()}${Math.floor(Math.random() * 1e6)}`);
+
+async function saveTracks(tracks) {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  try {
+    // Clear the legacy single-track field as we migrate to the array
+    const updated = normalizeTrip(await api(`/trips/${trip.id}`, { method: 'PUT', body: { tracks, track: null } }));
+    const idx = trips.findIndex(t => t.id === trip.id);
+    if (idx >= 0) trips[idx] = updated;
+    renderRoute(updated);
+    renderTripList();
+  } catch (err) { alert(err.message); }
+}
+
+// ── Route description (free-text notes about the hike) ──
+function renderRouteNotes(trip) {
+  const el = document.getElementById('route-notes');
+  el.value = trip.routeNotes || '';
+  el.disabled = !!trip.archived;
+  document.getElementById('route-notes-status').textContent = '';
+}
+
+async function saveRouteNotes(text) {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip || (trip.routeNotes || '') === text) return;
+  const statusEl = document.getElementById('route-notes-status');
+  statusEl.textContent = 'Saving…';
+  try {
+    const updated = normalizeTrip(await api(`/trips/${trip.id}`, { method: 'PUT', body: { routeNotes: text } }));
+    const idx = trips.findIndex(t => t.id === trip.id);
+    if (idx >= 0) trips[idx] = updated;
+    statusEl.textContent = 'Saved';
+    setTimeout(() => { if (statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 2000);
+  } catch (err) {
+    statusEl.textContent = 'Save failed';
+    alert(err.message);
+  }
+}
+
+const routeNotesEl = document.getElementById('route-notes');
+routeNotesEl.addEventListener('blur', () => saveRouteNotes(routeNotesEl.value));
+
+const gpxInput = document.getElementById('gpx-input');
+gpxInput.addEventListener('change', async e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) { gpxInput.value = ''; return; }
+  const label = document.getElementById('gpx-upload-text');
+  const prev = label.textContent;
+  label.textContent = 'Reading…';
+  const added = [], errors = [];
+  for (const file of files) {
+    try {
+      const text = await file.text();
+      const track = parseGpx(text, file.name.replace(/\.gpx$/i, ''));
+      track.id = newTrackId();
+      added.push(track);
+    } catch (err) { errors.push(`${file.name}: ${err.message || 'could not be read'}`); }
+  }
+  label.textContent = prev;
+  gpxInput.value = '';
+  if (errors.length) alert('Some files could not be added:\n' + errors.join('\n'));
+  if (added.length) await saveTracks([...(trip.tracks || []), ...added]);
+});
+
+document.getElementById('route-track-list').addEventListener('change', e => {
+  const toggle = e.target.closest('[data-toggle-track]');
+  if (!toggle) return;
+  const id = toggle.dataset.toggleTrack;
+  if (toggle.checked) hiddenTrackIds.delete(id);
+  else hiddenTrackIds.add(id);
+  const trip = trips.find(t => t.id === currentTripId);
+  if (trip) renderRoute(trip);
+});
+
+document.getElementById('route-track-list').addEventListener('click', e => {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const dlId = e.target.closest('[data-dl-track]')?.dataset.dlTrack;
+  const rmId = e.target.closest('[data-rm-track]')?.dataset.rmTrack;
+  const rnId = e.target.closest('[data-rename-track]')?.dataset.renameTrack;
+  if (dlId) {
+    const tk = (trip.tracks || []).find(t => t.id === dlId);
+    if (tk) downloadGpx(tk);
+  }
+  if (rnId) {
+    const tk = (trip.tracks || []).find(t => t.id === rnId);
+    if (!tk) return;
+    const name = prompt('Rename route:', tk.name || '');
+    if (name == null) return; // cancelled
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === tk.name) return;
+    saveTracks((trip.tracks || []).map(t => t.id === rnId ? { ...t, name: trimmed } : t));
+  }
+  if (rmId) {
+    if (!confirm('Remove this route from the trip?')) return;
+    saveTracks((trip.tracks || []).filter(t => t.id !== rmId));
+  }
+});
+
+function downloadGpx(track) {
+  const pts = (track.points || []).map(([la, lo, el]) =>
+    Number.isFinite(el)
+      ? `      <trkpt lat="${la}" lon="${lo}"><ele>${el}</ele></trkpt>`
+      : `      <trkpt lat="${la}" lon="${lo}"></trkpt>`
+  ).join('\n');
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Dither.fish" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>${esc(track.name || 'Route')}</name>
+    <trkseg>
+${pts}
+    </trkseg>
+  </trk>
+</gpx>`;
+  const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (track.name || 'route').replace(/[^\w.-]+/g, '_') + '.gpx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function renderRoute(trip) {
+  const emptyEl  = document.getElementById('route-empty');
+  const viewEl   = document.getElementById('route-view');
+  const uploadEl = document.getElementById('gpx-upload-label');
+  const archived = !!trip.archived;
+  const tracks   = (trip.tracks || []).filter(t => t && t.points && t.points.length);
+
+  uploadEl.classList.toggle('hidden', archived); // upload only on active trips
+
+  if (!tracks.length) {
+    viewEl.classList.add('hidden');
+    emptyEl.classList.remove('hidden');
+    emptyEl.textContent = archived
+      ? 'No route was saved for this trip.'
+      : 'No route yet — upload one or more GPX files to see them on the map.';
+    return;
+  }
+
+  emptyEl.classList.add('hidden');
+  viewEl.classList.remove('hidden');
+
+  // Map — draw every track in its own colour, fit to the combined bounds
+  if (typeof L === 'undefined') {
+    document.getElementById('trip-map').style.display = 'none';
+  } else {
+    if (!tripMap) {
+      tripMap = L.map('trip-map', { scrollWheelZoom: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(tripMap);
+    }
+    if (trackLayer) { trackLayer.remove(); trackLayer = null; }
+    const layers = [];
+    let allBounds = null;
+    tracks.forEach((tk, i) => {
+      if (hiddenTrackIds.has(tk.id)) return; // toggled off the map
+      const latlngs = tk.points.map(p => [p[0], p[1]]);
+      const color = trackColor(i);
+      const line = L.polyline(latlngs, { color, weight: 4 });
+      layers.push(line);
+      layers.push(L.circleMarker(latlngs[0], { radius: 5, color, fillColor: color, fillOpacity: 1 }));
+      layers.push(L.circleMarker(latlngs[latlngs.length - 1], { radius: 5, color: '#b00020', fillColor: '#b00020', fillOpacity: 1 }));
+      const b = line.getBounds();
+      allBounds = allBounds ? allBounds.extend(b) : b;
+    });
+    trackLayer = L.layerGroup(layers).addTo(tripMap);
+    if (allBounds) tripMap.fitBounds(allBounds, { padding: [20, 20] });
+    setTimeout(() => tripMap.invalidateSize(), 0); // container may have been hidden when created
+  }
+
+  // Summary stats across all tracks
+  const totalKm  = tracks.reduce((s, t) => s + (t.distance || 0), 0) / 1000;
+  const totalAsc = tracks.reduce((s, t) => s + (t.ascent || 0), 0);
+  const multi = tracks.length > 1;
+  const stats = [
+    { label: multi ? 'Total distance' : 'Distance', value: totalKm >= 0.1 ? `${totalKm.toFixed(1)} km` : '—' },
+    { label: multi ? 'Total ascent' : 'Ascent', value: totalAsc ? `${totalAsc.toLocaleString()} m` : '—' },
+    { label: 'Tracks', value: String(tracks.length) },
+  ];
+  document.getElementById('route-stats').innerHTML = stats.map(s => `
+    <div class="route-stat">
+      <span class="route-stat-value">${s.value}</span>
+      <span class="route-stat-label">${s.label}</span>
+    </div>`).join('');
+
+  // Per-track list with download / remove
+  document.getElementById('route-track-list').innerHTML = tracks.map((tk, i) => {
+    const km = (tk.distance || 0) / 1000;
+    const meta = [
+      km >= 0.1 ? `${km.toFixed(1)} km` : null,
+      tk.ascent ? `${tk.ascent.toLocaleString()} m` : null,
+    ].filter(Boolean).join(' · ') || '—';
+    const shown = !hiddenTrackIds.has(tk.id);
+    return `
+      <li class="route-track${shown ? '' : ' route-track--hidden'}">
+        <input type="checkbox" class="route-track-toggle" data-toggle-track="${tk.id}" ${shown ? 'checked' : ''} title="Show on map" />
+        <span class="route-track-swatch" style="background:${trackColor(i)}"></span>
+        <div class="route-track-info">
+          <span class="route-track-name">${esc(tk.name || `Route ${i + 1}`)}</span>
+          <span class="route-track-meta">${meta}</span>
+        </div>
+        ${archived ? '' : `<button class="route-track-rn" data-rename-track="${tk.id}" title="Rename">Rename</button>`}
+        <button class="route-track-dl" data-dl-track="${tk.id}" title="Download GPX">Download</button>
+        ${archived ? '' : `<button class="route-track-rm" data-rm-track="${tk.id}" title="Remove">Remove</button>`}
+      </li>`;
+  }).join('');
+
+  renderElevation(tracks);
+}
+
+// "Nice" axis scale: rounded tick step and domain covering [min, max]
+function niceScale(min, max, target) {
+  const span = (max - min) || 1;
+  const raw = span / target;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag;
+  const lo = Math.floor(min / step) * step;
+  const hi = Math.ceil(max / step) * step;
+  const ticks = [];
+  for (let v = lo; v <= hi + step * 1e-6; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
+  return { ticks, lo, hi };
+}
+
+function renderElevation(tracks) {
+  const wrap = document.getElementById('elevation-wrap');
+  const svg  = document.getElementById('elevation-profile');
+
+  // Build a profile (cumulative distance + elevation) for each visible track
+  const profiles = [];
+  tracks.forEach((tk, i) => {
+    if (hiddenTrackIds.has(tk.id)) return; // toggled off the map
+    const eles = tk.points.map(p => p[2]).filter(e => Number.isFinite(e));
+    if (eles.length < 2) return;
+    const dists = [0];
+    for (let j = 1; j < tk.points.length; j++) dists.push(dists[j - 1] + haversine(tk.points[j - 1], tk.points[j]));
+    profiles.push({ track: tk, color: trackColor(i), eles, dists });
+  });
+  if (!profiles.length) { wrap.classList.add('hidden'); svg.innerHTML = ''; return; }
+  wrap.classList.remove('hidden');
+
+  // Plot geometry (user units; SVG scales uniformly so text isn't distorted)
+  const VB_W = 1000, VB_H = 260;
+  const M = { l: 62, r: 16, t: 14, b: 46 };
+  const plotW = VB_W - M.l - M.r;
+  const plotH = VB_H - M.t - M.b;
+
+  // Shared domains across all visible tracks
+  let minE = Infinity, maxE = -Infinity;
+  profiles.forEach(pr => pr.eles.forEach(e => { if (e < minE) minE = e; if (e > maxE) maxE = e; }));
+  const maxDist = Math.max(...profiles.map(pr => pr.dists[pr.dists.length - 1] || 0)) || 1;
+
+  const yScale = niceScale(minE, maxE, 4);
+  const xScale = niceScale(0, maxDist, 5);
+  const xOf = d => M.l + (d / xScale.hi) * plotW;
+  const yOf = e => M.t + (1 - (e - yScale.lo) / ((yScale.hi - yScale.lo) || 1)) * plotH;
+  const baseY = M.t + plotH;
+
+  // Grid + axis ticks
+  const yGrid = yScale.ticks.map(v => {
+    const y = yOf(v);
+    return `<line class="elev-grid" x1="${M.l}" y1="${y.toFixed(1)}" x2="${M.l + plotW}" y2="${y.toFixed(1)}" />`
+      + `<text class="elev-tick-label" x="${M.l - 8}" y="${(y + 5).toFixed(1)}" text-anchor="end">${v.toLocaleString()}</text>`;
+  }).join('');
+  const xTicks = xScale.ticks.map(v => {
+    const x = xOf(v);
+    return `<line class="elev-grid" x1="${x.toFixed(1)}" y1="${baseY}" x2="${x.toFixed(1)}" y2="${baseY + 5}" />`
+      + `<text class="elev-tick-label" x="${x.toFixed(1)}" y="${baseY + 24}" text-anchor="middle">${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text>`;
+  }).join('');
+
+  const axes =
+    `<line class="elev-axis" x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${baseY}" />` +
+    `<line class="elev-axis" x1="${M.l}" y1="${baseY}" x2="${M.l + plotW}" y2="${baseY}" />`;
+  const titles =
+    `<text class="elev-axis-title" x="${M.l + plotW / 2}" y="${VB_H - 4}" text-anchor="middle">Distance (km)</text>` +
+    `<text class="elev-axis-title" transform="translate(16,${M.t + plotH / 2}) rotate(-90)" text-anchor="middle">Elevation (m)</text>`;
+
+  const single = profiles.length === 1;
+  const series = profiles.map(pr => {
+    const coords = pr.track.points.map((p, j) => {
+      const e = Number.isFinite(p[2]) ? p[2] : yScale.lo;
+      return `${xOf(pr.dists[j]).toFixed(1)},${yOf(e).toFixed(1)}`;
+    });
+    const line = coords.join(' ');
+    const end = xOf(pr.dists[pr.dists.length - 1]);
+    const area = single ? `<polygon class="elev-area" points="${M.l},${baseY} ${line} ${end.toFixed(1)},${baseY}" />` : '';
+    return `${area}<polyline class="elev-line" points="${line}" style="stroke:${pr.color}" />`;
+  }).join('');
+
+  svg.innerHTML = yGrid + xTicks + axes + series + titles;
 }
 
 function renderPackSection(trip) {
@@ -1143,11 +1573,10 @@ function renderPackSection(trip) {
     const itemType = p.type || 'base';
     return `
       <li class="pack-item${p.checked ? ' pack-item-checked' : ''}"${!archived ? ` draggable="true" data-drag-id="${g.id}"` : ''}>
-        ${!archived ? `<span class="drag-handle" title="Drag to cube">⠿</span>` : ''}
         <input type="checkbox" class="pack-check" data-check="${g.id}" ${p.checked ? 'checked' : ''} />
         <div class="pack-item-info">
           <div class="pack-item-name">${esc(g.name)}</div>
-          <div class="pack-item-meta">${[g.category, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
+          <div class="pack-item-meta">${[g.category, g.brand, lineWeight].filter(Boolean).join(' · ') || '—'}</div>
         </div>
         ${!archived ? `
         <div class="pack-item-qty">
@@ -1174,7 +1603,6 @@ function renderPackSection(trip) {
     return `
       <div class="pack-bundle-group${exp ? ' expanded' : ''}">
         <div class="pack-bundle-header" data-toggle-bundle="${b.id}"${!archived ? ` draggable="true" data-drag-bundle="${b.id}"` : ''}>
-          ${!archived ? `<span class="drag-handle" title="Drag to cube">⠿</span>` : ''}
           <span class="pack-bundle-chevron">${exp ? '▾' : '▸'}</span>
           <span class="pack-bundle-name">${esc(b.name)}</span>
           <span class="pack-bundle-stats">${bChecked}/${bItems.length} packed</span>
@@ -1528,7 +1956,10 @@ function renderPicker() {
   renderPickerBundles();
   const q = pickerSearch.value.toLowerCase();
   const filtered = gear.filter(g =>
-    !q || g.name.toLowerCase().includes(q) || (g.category || '').toLowerCase().includes(q)
+    !q ||
+    g.name.toLowerCase().includes(q) ||
+    (g.brand || '').toLowerCase().includes(q) ||
+    (g.notes || '').toLowerCase().includes(q)
   );
   const pack = trip.packs[currentPackIdx];
   const inPack = new Set((pack?.items || []).map(p => p.gearId));

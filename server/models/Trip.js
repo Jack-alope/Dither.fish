@@ -54,6 +54,16 @@ const frozenBundleSchema = new mongoose.Schema({
   items: { type: [frozenBundleItemSchema], default: [] },
 }, { _id: false });
 
+// GPX route track for a trip
+const trackSchema = new mongoose.Schema({
+  id:       { type: String, default: '' },            // client-generated id for keying
+  name:     { type: String, default: '' },
+  points:   { type: [[Number]], default: undefined }, // [[lat, lon, ele], ...]
+  distance: { type: Number, default: null },          // metres
+  ascent:   { type: Number, default: null },          // metres of cumulative gain
+  bounds:   { type: [Number], default: undefined },   // [minLat, minLon, maxLat, maxLon]
+}, { _id: false });
+
 const tripSchema = new mongoose.Schema({
   userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   name:          { type: String, required: true, trim: true },
@@ -64,6 +74,9 @@ const tripSchema = new mongoose.Schema({
   pack:          { type: [packItemSchema], default: [] },
   packs:         { type: [packSchema], default: [] },
   archived:      { type: Boolean, default: false },
+  track:         { type: trackSchema, default: null },  // legacy single track (kept for back-compat)
+  tracks:        { type: [trackSchema], default: [] },
+  routeNotes:    { type: String, default: '' },         // free-text hike description (days, camping, etc.)
   frozenGear:    { type: [frozenGearSchema], default: null },
   frozenBundles: { type: [frozenBundleSchema], default: null },
 }, { timestamps: true });
