@@ -13,6 +13,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Dither" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -290,10 +292,52 @@
           <p class="trip-meta" id="trip-detail-meta"></p>
           <p class="trip-detail-notes hidden" id="trip-detail-notes"></p>
 
-          <div class="pack-layout">
-            <div class="pack-column">
-              <div id="pack-tabs-area"></div>
-              <div id="pack-body-area"></div>
+          <!-- Trip sub-pages: Pack / Route -->
+          <div class="trip-subnav">
+            <button class="trip-subnav-btn active" data-trip-page="pack">Pack</button>
+            <button class="trip-subnav-btn" data-trip-page="route">Route</button>
+          </div>
+
+          <!-- Pack page -->
+          <div id="trip-page-pack" class="trip-page">
+            <div class="pack-layout">
+              <div class="pack-column">
+                <div id="pack-tabs-area"></div>
+                <div id="pack-body-area"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Route page (GPX) -->
+          <div id="trip-page-route" class="trip-page hidden">
+            <div class="route-notes-section">
+              <div class="route-header">
+                <h3>Description</h3>
+                <span class="route-notes-status" id="route-notes-status"></span>
+              </div>
+              <textarea id="route-notes" class="route-notes-input" rows="5"
+                placeholder="Notes about the hike — daily plan, mileage, campsites, water sources, permits…"></textarea>
+            </div>
+            <div class="trip-route-section">
+              <div class="route-header">
+                <h3>Route</h3>
+                <div class="route-actions">
+                  <label class="btn-secondary route-upload-btn" id="gpx-upload-label">
+                    <input type="file" id="gpx-input" accept=".gpx,application/gpx+xml" multiple hidden />
+                    <span id="gpx-upload-text">Add GPX</span>
+                  </label>
+                </div>
+              </div>
+              <p class="route-empty" id="route-empty">No route yet — upload one or more GPX files to see them on the map.</p>
+              <div id="route-view" class="hidden">
+                <div id="trip-map" class="trip-map"></div>
+                <div class="route-stats" id="route-stats"></div>
+                <ul class="route-track-list" id="route-track-list"></ul>
+                <div class="elevation-wrap hidden" id="elevation-wrap">
+                  <div class="elevation-label">Elevation</div>
+                  <svg id="elevation-profile" class="elevation-profile" viewBox="0 0 1000 260"></svg>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -544,6 +588,8 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="app.js"></script>
 </body>
 </html>

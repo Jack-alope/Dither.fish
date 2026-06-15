@@ -11,7 +11,12 @@ const port = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
 // Security headers
-app.use(helmet({ contentSecurityPolicy: false }));
+// Send the origin as Referer on cross-origin requests so OpenStreetMap tile
+// servers (which require a valid Referer) don't block map tiles.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
 
 // CORS — locked to ALLOWED_ORIGIN in production, open in dev
 app.use(cors(isProd && process.env.ALLOWED_ORIGIN
@@ -19,8 +24,8 @@ app.use(cors(isProd && process.env.ALLOWED_ORIGIN
   : {}
 ));
 
-// Body size cap
-app.use(express.json({ limit: '100kb' }));
+// Body size cap (larger to allow GPX route tracks stored on trips)
+app.use(express.json({ limit: '512kb' }));
 
 // Rate limiting on auth endpoints (20 requests per 15 min per IP)
 const authLimiter = rateLimit({

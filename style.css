@@ -1258,6 +1258,153 @@ main {
   display: block;
 }
 
+/* ── Trip sub-pages (Pack / Route) ── */
+.trip-subnav {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+.trip-subnav-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.9rem;
+  margin-bottom: -1px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.trip-subnav-btn:hover { color: var(--text); }
+.trip-subnav-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.trip-page.hidden { display: none; }
+
+/* ── Trip route / GPX ── */
+.trip-route-section {
+  margin-bottom: 1.5rem;
+}
+.route-notes-section { margin-bottom: 1.5rem; }
+.route-notes-status { font-size: 0.78rem; color: var(--text-muted); }
+.route-notes-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.route-notes-input:focus { border-color: var(--accent); }
+.route-notes-input:disabled { color: var(--text-muted); background: var(--bg); }
+.route-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.route-header h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.route-actions { display: flex; gap: 0.5rem; }
+.route-upload-btn { cursor: pointer; }
+.route-empty {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  padding: 1.25rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+.trip-map {
+  height: 340px;
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  z-index: 0;
+}
+.route-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+}
+.route-stat { display: flex; flex-direction: column; }
+.route-stat-value { font-size: 1rem; font-weight: 700; color: var(--text); }
+.route-stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.route-track-list { list-style: none; margin: 1rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.route-track {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.route-track-toggle { width: 15px; height: 15px; flex-shrink: 0; cursor: pointer; accent-color: var(--accent); }
+.route-track-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.route-track--hidden .route-track-swatch,
+.route-track--hidden .route-track-info { opacity: 0.45; }
+.route-track-info { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.5rem; }
+.route-track-name { font-size: 0.875rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.route-track-meta { font-size: 0.75rem; color: var(--text-muted); }
+.route-track button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+.route-track .route-track-dl:hover,
+.route-track .route-track-rn:hover { color: var(--accent); background: var(--accent-light); }
+.route-track .route-track-rm:hover { color: var(--danger); background: #fdecea; }
+.elevation-wrap { margin-top: 1rem; }
+.elevation-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+.elevation-profile {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.elevation-profile .elev-area { fill: var(--accent-light); }
+.elevation-profile .elev-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.elevation-profile .elev-axis { stroke: var(--border); stroke-width: 1.5; }
+.elevation-profile .elev-grid { stroke: var(--border); stroke-width: 1; opacity: 0.5; }
+.elevation-profile .elev-tick-label { fill: var(--text-muted); font-size: 16px; font-family: inherit; }
+.elevation-profile .elev-axis-title { fill: var(--text-muted); font-size: 17px; font-weight: 600; font-family: inherit; }
+
 .pack-tabs {
   display: flex;
   flex-wrap: wrap;
