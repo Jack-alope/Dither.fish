@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="Dither" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 
@@ -197,6 +197,13 @@
   </div>
 
   <!-- ───── APP ───── -->
+  <div id="public-error" class="public-error hidden">
+    <img src="/favicons/icon.svg" alt="Dither.fish" class="public-error-logo" />
+    <h1>Trip not available</h1>
+    <p>This trip is private or the link is no longer valid.</p>
+    <a class="btn-primary" href="/">Go to Dither.fish</a>
+  </div>
+
   <div id="app" class="hidden">
     <header>
       <div class="header-inner">
@@ -284,13 +291,20 @@
             <h2 id="trip-detail-name"></h2>
             <div class="trip-actions">
               <button class="btn-primary" id="btn-open-picker">+ Add Gear</button>
+              <button class="btn-secondary" id="btn-toggle-public">Make Public</button>
               <button class="btn-secondary" id="btn-edit-trip">Edit</button>
               <button class="btn-secondary" id="btn-archive-trip">Archive</button>
               <button class="btn-danger" id="btn-delete-trip">Delete Trip</button>
             </div>
           </div>
+          <p class="public-note hidden" id="public-note">📍 Shared trip · view only — <a href="/">make your own at dither.fish</a></p>
           <p class="trip-meta" id="trip-detail-meta"></p>
           <p class="trip-detail-notes hidden" id="trip-detail-notes"></p>
+          <div class="trip-share hidden" id="trip-share">
+            <span class="trip-share-label">🔗 Public link</span>
+            <input type="text" id="trip-share-link" class="trip-share-input" readonly />
+            <button class="btn-secondary" id="btn-copy-share">Copy</button>
+          </div>
 
           <!-- Trip sub-pages: Pack / Route -->
           <div class="trip-subnav">

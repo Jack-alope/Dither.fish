@@ -11,6 +11,7 @@ let bundles = [];
 let currentView    = 'gear';
 let currentTripId  = null;
 let currentPackIdx = 0;
+let publicView     = false; // viewing someone's shared trip read-only (no login)
 
 // ── API helper ───────────────────────────────────────────────────────────────
 
@@ -164,7 +165,42 @@ function normalizeTrip(t)  {
   return base;
 }
 
-if (authToken) { showApp(); } else { showLanding(); }
+// Public shared-trip view at /t/<publicId> — no login required
+const publicMatch = location.pathname.match(/^\/t\/([^/]+)\/?$/);
+if (publicMatch) { loadPublicTrip(decodeURIComponent(publicMatch[1])); }
+else if (authToken) { showApp(); }
+else { showLanding(); }
+
+async function loadPublicTrip(publicId) {
+  publicView = true;
+  document.body.classList.add('public-view');
+  landingScreen.classList.add('hidden');
+  authScreen.classList.add('hidden');
+  let data;
+  try {
+    const res = await fetch(`/api/public/trips/${encodeURIComponent(publicId)}`);
+    if (!res.ok) throw new Error();
+    data = await res.json();
+  } catch {
+    appEl.classList.add('hidden');
+    document.getElementById('public-error').classList.remove('hidden');
+    return;
+  }
+  appEl.classList.remove('hidden');
+  // Render through the read-only (archived) path using the server-resolved snapshots
+  gear = [];
+  bundles = [];
+  const trip = normalizeTrip(data);
+  trips = [trip];
+  currentTripId = trip.id;
+  currentPackIdx = 0;
+  currentTripPage = 'route';
+  routeNotesEditing = false;
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-trips'));
+  document.getElementById('trip-list-panel').classList.add('hidden');
+  document.getElementById('trip-detail-panel').classList.remove('hidden');
+  renderTripDetail();
+}
 
 // Landing page buttons
 document.getElementById('lp-btn-signin').addEventListener('click', () => showAuth('login'));
@@ -1123,7 +1159,9 @@ function renderTripDetail() {
     const nameEl = document.getElementById('trip-detail-name');
     nameEl.parentNode.insertBefore(bannerEl, nameEl.nextSibling);
   }
-  bannerEl.classList.toggle('hidden', !trip.archived);
+  bannerEl.classList.toggle('hidden', !trip.archived || publicView); // hide "archived" wording on public views
+  document.getElementById('public-note').classList.toggle('hidden', !publicView);
+  renderTripShare(trip);
   const packs = trip.packs || [];
   if (currentPackIdx >= packs.length) currentPackIdx = Math.max(0, packs.length - 1);
   renderPackSection(trip);
@@ -1132,6 +1170,45 @@ function renderTripDetail() {
   renderRouteNotes(trip);
   setTripPage(currentTripPage);
 }
+
+// ── Public sharing (owner controls) ──
+function renderTripShare(trip) {
+  const btn = document.getElementById('btn-toggle-public');
+  const share = document.getElementById('trip-share');
+  if (publicView) { btn.classList.add('hidden'); share.classList.add('hidden'); return; }
+  btn.classList.remove('hidden');
+  btn.textContent = trip.public ? 'Make Private' : 'Make Public';
+  btn.classList.toggle('btn-public-on', !!trip.public);
+  if (trip.public && trip.publicId) {
+    share.classList.remove('hidden');
+    document.getElementById('trip-share-link').value = `${location.origin}/t/${trip.publicId}`;
+  } else {
+    share.classList.add('hidden');
+  }
+}
+
+document.getElementById('btn-toggle-public').addEventListener('click', async () => {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const makePublic = !trip.public;
+  if (!makePublic && !confirm('Make this trip private? The public link will stop working.')) return;
+  try {
+    const updated = normalizeTrip(await api(`/trips/${trip.id}/share`, { method: 'PUT', body: { public: makePublic } }));
+    const idx = trips.findIndex(t => t.id === trip.id);
+    if (idx >= 0) trips[idx] = updated;
+    renderTripShare(updated);
+  } catch (err) { alert(err.message); }
+});
+
+document.getElementById('btn-copy-share').addEventListener('click', () => {
+  const inp = document.getElementById('trip-share-link');
+  inp.select();
+  navigator.clipboard?.writeText(inp.value);
+  const btn = document.getElementById('btn-copy-share');
+  const prev = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = prev; }, 1500);
+});
 
 // ── Trip route / GPX ─────────────────────────────────────────────────────────
 let tripMap = null;

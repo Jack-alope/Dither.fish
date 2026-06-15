@@ -1284,6 +1284,56 @@ main {
 }
 .trip-page.hidden { display: none; }
 
+/* ── Trip public sharing ── */
+#btn-toggle-public.btn-public-on { color: var(--accent); border-color: var(--accent); background: var(--accent-light); }
+.trip-share {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--accent-light);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.trip-share-label { font-size: 0.8rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.trip-share-input {
+  flex: 1;
+  min-width: 12rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  background: var(--surface);
+  color: var(--text);
+}
+.public-note {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background: var(--accent-light);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.public-note a { color: var(--accent); font-weight: 600; }
+
+/* Public (view-only) mode — hide owner/app chrome */
+.public-view header nav,
+.public-view .header-user,
+.public-view .trip-actions,
+.public-view #btn-back-trips { display: none !important; }
+
+.public-error {
+  max-width: 28rem;
+  margin: 4rem auto;
+  text-align: center;
+  padding: 0 1.5rem;
+}
+.public-error-logo { width: 56px; height: 56px; margin-bottom: 1rem; }
+.public-error h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+.public-error p { color: var(--text-muted); margin-bottom: 1.5rem; }
+
 /* ── Trip route / GPX ── */
 .trip-route-section {
   margin-bottom: 1.5rem;
