@@ -43,6 +43,7 @@ app.use('/api/gear',    require('./routes/gear'));
 app.use('/api/trips',   require('./routes/trips'));
 app.use('/api/catalog', require('./routes/catalog'));
 app.use('/api/bundles', require('./routes/bundles'));
+app.use('/api/public',  require('./routes/public')); // no auth — view-only shared trips
 
 // Serve frontend
 app.use(express.static(path.join(__dirname, '..')));

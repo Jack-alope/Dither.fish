@@ -11,6 +11,7 @@ let bundles = [];
 let currentView    = 'gear';
 let currentTripId  = null;
 let currentPackIdx = 0;
+let publicView     = false; // viewing someone's shared trip read-only (no login)
 
 // ── API helper ───────────────────────────────────────────────────────────────
 
@@ -164,7 +165,42 @@ function normalizeTrip(t)  {
   return base;
 }
 
-if (authToken) { showApp(); } else { showLanding(); }
+// Public shared-trip view at /t/<publicId> — no login required
+const publicMatch = location.pathname.match(/^\/t\/([^/]+)\/?$/);
+if (publicMatch) { loadPublicTrip(decodeURIComponent(publicMatch[1])); }
+else if (authToken) { showApp(); }
+else { showLanding(); }
+
+async function loadPublicTrip(publicId) {
+  publicView = true;
+  document.body.classList.add('public-view');
+  landingScreen.classList.add('hidden');
+  authScreen.classList.add('hidden');
+  let data;
+  try {
+    const res = await fetch(`/api/public/trips/${encodeURIComponent(publicId)}`);
+    if (!res.ok) throw new Error();
+    data = await res.json();
+  } catch {
+    appEl.classList.add('hidden');
+    document.getElementById('public-error').classList.remove('hidden');
+    return;
+  }
+  appEl.classList.remove('hidden');
+  // Render through the read-only (archived) path using the server-resolved snapshots
+  gear = [];
+  bundles = [];
+  const trip = normalizeTrip(data);
+  trips = [trip];
+  currentTripId = trip.id;
+  currentPackIdx = 0;
+  currentTripPage = 'route';
+  routeNotesEditing = false;
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-trips'));
+  document.getElementById('trip-list-panel').classList.add('hidden');
+  document.getElementById('trip-detail-panel').classList.remove('hidden');
+  renderTripDetail();
+}
 
 // Landing page buttons
 document.getElementById('lp-btn-signin').addEventListener('click', () => showAuth('login'));
@@ -1068,7 +1104,8 @@ document.addEventListener('keydown', e => {
 function showTripDetail(id) {
   currentTripId   = id;
   currentPackIdx  = 0;
-  currentTripPage = 'pack'; // every trip opens on the Pack page
+  currentTripPage = 'route'; // every trip opens on the Route page
+  routeNotesEditing = false;
   hiddenTrackIds.clear();   // reset map visibility toggles per trip
   closePicker();
   tripListPanel.classList.add('hidden');
@@ -1077,7 +1114,7 @@ function showTripDetail(id) {
 }
 
 // ── Trip sub-pages (Pack / Route) ──
-let currentTripPage = 'pack';
+let currentTripPage = 'route';
 function setTripPage(page) {
   currentTripPage = page;
   document.getElementById('trip-page-pack').classList.toggle('hidden', page !== 'pack');
@@ -1122,7 +1159,9 @@ function renderTripDetail() {
     const nameEl = document.getElementById('trip-detail-name');
     nameEl.parentNode.insertBefore(bannerEl, nameEl.nextSibling);
   }
-  bannerEl.classList.toggle('hidden', !trip.archived);
+  bannerEl.classList.toggle('hidden', !trip.archived || publicView); // hide "archived" wording on public views
+  document.getElementById('public-note').classList.toggle('hidden', !publicView);
+  renderTripShare(trip);
   const packs = trip.packs || [];
   if (currentPackIdx >= packs.length) currentPackIdx = Math.max(0, packs.length - 1);
   renderPackSection(trip);
@@ -1132,9 +1171,50 @@ function renderTripDetail() {
   setTripPage(currentTripPage);
 }
 
+// ── Public sharing (owner controls) ──
+function renderTripShare(trip) {
+  const btn = document.getElementById('btn-toggle-public');
+  const share = document.getElementById('trip-share');
+  if (publicView) { btn.classList.add('hidden'); share.classList.add('hidden'); return; }
+  btn.classList.remove('hidden');
+  btn.textContent = trip.public ? 'Make Private' : 'Make Public';
+  btn.classList.toggle('btn-public-on', !!trip.public);
+  if (trip.public && trip.publicId) {
+    share.classList.remove('hidden');
+    document.getElementById('trip-share-link').value = `${location.origin}/t/${trip.publicId}`;
+  } else {
+    share.classList.add('hidden');
+  }
+}
+
+document.getElementById('btn-toggle-public').addEventListener('click', async () => {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const makePublic = !trip.public;
+  if (!makePublic && !confirm('Make this trip private? The public link will stop working.')) return;
+  try {
+    const updated = normalizeTrip(await api(`/trips/${trip.id}/share`, { method: 'PUT', body: { public: makePublic } }));
+    const idx = trips.findIndex(t => t.id === trip.id);
+    if (idx >= 0) trips[idx] = updated;
+    renderTripShare(updated);
+  } catch (err) { alert(err.message); }
+});
+
+document.getElementById('btn-copy-share').addEventListener('click', () => {
+  const inp = document.getElementById('trip-share-link');
+  inp.select();
+  navigator.clipboard?.writeText(inp.value);
+  const btn = document.getElementById('btn-copy-share');
+  const prev = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = prev; }, 1500);
+});
+
 // ── Trip route / GPX ─────────────────────────────────────────────────────────
 let tripMap = null;
 let trackLayer = null;
+let hoverLayer = null;        // map markers shown while hovering the elevation chart
+let elevationState = null;    // geometry/scales of the last-rendered elevation chart
 const hiddenTrackIds = new Set(); // tracks toggled off the map (view state, not persisted)
 
 const MAX_TRACK_POINTS = 2000;
@@ -1219,23 +1299,135 @@ async function saveTracks(tracks) {
   } catch (err) { alert(err.message); }
 }
 
-// ── Route description (free-text notes about the hike) ──
+// ── Route description (Markdown source, blog-style rendered view) ──
+// Markdown is future-proof: no deprecated execCommand, portable, safe to render.
+let routeNotesEditing = false;
+
+function mdInline(s) {
+  s = esc(s); // escape HTML first, then add our own known-safe tags
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (m, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*(?!\s)([^*]+?)\*/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[^\w])_(?!\s)([^_]+?)_/g, '$1<em>$2</em>');
+  return s;
+}
+
+function mdToHtml(md) {
+  const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  let i = 0;
+  const isUl = l => /^\s*[-*]\s+/.test(l);
+  const isOl = l => /^\s*\d+\.\s+/.test(l);
+  const isH  = l => /^#{1,3}\s+/.test(l);
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    const h = /^(#{1,3})\s+(.*)$/.exec(line);
+    if (h) { out.push(`<h${h[1].length}>${mdInline(h[2].trim())}</h${h[1].length}>`); i++; continue; }
+    if (isUl(line)) {
+      const items = [];
+      while (i < lines.length && isUl(lines[i])) { items.push(`<li>${mdInline(lines[i].replace(/^\s*[-*]\s+/, '').trim())}</li>`); i++; }
+      out.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+    if (isOl(line)) {
+      const items = [];
+      while (i < lines.length && isOl(lines[i])) { items.push(`<li>${mdInline(lines[i].replace(/^\s*\d+\.\s+/, '').trim())}</li>`); i++; }
+      out.push(`<ol>${items.join('')}</ol>`); continue;
+    }
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !isH(lines[i]) && !isUl(lines[i]) && !isOl(lines[i])) { para.push(lines[i]); i++; }
+    out.push(`<p>${para.map(mdInline).join('<br>')}</p>`);
+  }
+  return out.join('');
+}
+
+// Convert any legacy HTML notes (from the earlier WYSIWYG editor) back to Markdown
+function htmlToMd(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const inline = node => {
+    let s = '';
+    node.childNodes.forEach(n => {
+      if (n.nodeType === 3) { s += n.textContent; return; }
+      if (n.nodeType !== 1) return;
+      const t = n.tagName, inner = inline(n);
+      if (t === 'B' || t === 'STRONG') s += `**${inner}**`;
+      else if (t === 'I' || t === 'EM') s += `*${inner}*`;
+      else if (t === 'A') s += `[${inner}](${n.getAttribute('href') || ''})`;
+      else if (t === 'BR') s += '\n';
+      else s += inner;
+    });
+    return s;
+  };
+  const blocks = [];
+  tmp.childNodes.forEach(n => {
+    if (n.nodeType === 3) { const t = n.textContent.trim(); if (t) blocks.push(t); return; }
+    if (n.nodeType !== 1) return;
+    const t = n.tagName;
+    if (/^H[1-3]$/.test(t)) blocks.push('#'.repeat(+t[1]) + ' ' + inline(n).trim());
+    else if (t === 'UL') n.querySelectorAll(':scope > li').forEach(li => blocks.push('- ' + inline(li).trim()));
+    else if (t === 'OL') { let k = 1; n.querySelectorAll(':scope > li').forEach(li => blocks.push((k++) + '. ' + inline(li).trim())); }
+    else blocks.push(inline(n).trim());
+  });
+  return blocks.filter(Boolean).join('\n\n');
+}
+
+function getRouteNotesMd(trip) {
+  const raw = trip.routeNotes || '';
+  if (raw && /<(h[1-3]|p|ul|ol|li|br|strong|b|em|i|a|div|span)\b/i.test(raw)) return htmlToMd(raw);
+  return raw;
+}
+
 function renderRouteNotes(trip) {
-  const el = document.getElementById('route-notes');
-  el.value = trip.routeNotes || '';
-  el.disabled = !!trip.archived;
+  const md       = getRouteNotesMd(trip);
+  const viewEl   = document.getElementById('route-notes-view');
+  const emptyEl  = document.getElementById('route-notes-empty');
+  const editorEl = document.getElementById('route-notes-editor');
+  const editBtn  = document.getElementById('btn-edit-notes');
+  const archived = !!trip.archived;
+  const hasContent = !!md.trim();
+
+  if (routeNotesEditing && !archived) {
+    editorEl.classList.remove('hidden');
+    viewEl.classList.add('hidden');
+    emptyEl.classList.add('hidden');
+    editBtn.classList.add('hidden');
+    return;
+  }
+
+  editorEl.classList.add('hidden');
+  viewEl.innerHTML = hasContent ? mdToHtml(md) : '';
+  viewEl.classList.toggle('hidden', !hasContent);
+  emptyEl.classList.toggle('hidden', hasContent);
+  emptyEl.textContent = archived ? 'No description.' : 'No description yet.';
+  editBtn.textContent = hasContent ? 'Edit' : 'Add description';
+  editBtn.classList.toggle('hidden', archived);
   document.getElementById('route-notes-status').textContent = '';
 }
 
-async function saveRouteNotes(text) {
+function enterRouteNotesEdit() {
   const trip = trips.find(t => t.id === currentTripId);
-  if (!trip || (trip.routeNotes || '') === text) return;
+  if (!trip || trip.archived) return;
+  routeNotesEditing = true;
+  document.getElementById('route-notes').value = getRouteNotesMd(trip);
+  renderRouteNotes(trip);
+  document.getElementById('route-notes').focus();
+}
+
+async function saveRouteNotes(md) {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const val = (md || '').replace(/\s+$/,'');
+  if (getRouteNotesMd(trip) === val) { routeNotesEditing = false; renderRouteNotes(trip); return; }
   const statusEl = document.getElementById('route-notes-status');
   statusEl.textContent = 'Saving…';
   try {
-    const updated = normalizeTrip(await api(`/trips/${trip.id}`, { method: 'PUT', body: { routeNotes: text } }));
+    const updated = normalizeTrip(await api(`/trips/${trip.id}`, { method: 'PUT', body: { routeNotes: val } }));
     const idx = trips.findIndex(t => t.id === trip.id);
     if (idx >= 0) trips[idx] = updated;
+    routeNotesEditing = false;
+    renderRouteNotes(updated);
     statusEl.textContent = 'Saved';
     setTimeout(() => { if (statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 2000);
   } catch (err) {
@@ -1244,8 +1436,52 @@ async function saveRouteNotes(text) {
   }
 }
 
-const routeNotesEl = document.getElementById('route-notes');
-routeNotesEl.addEventListener('blur', () => saveRouteNotes(routeNotesEl.value));
+document.getElementById('btn-edit-notes').addEventListener('click', enterRouteNotesEdit);
+document.getElementById('btn-save-notes').addEventListener('click', () => saveRouteNotes(document.getElementById('route-notes').value));
+document.getElementById('btn-cancel-notes').addEventListener('click', () => {
+  routeNotesEditing = false;
+  const trip = trips.find(t => t.id === currentTripId);
+  if (trip) renderRouteNotes(trip);
+});
+
+// Markdown toolbar — operates on the textarea selection
+(function () {
+  const ta = document.getElementById('route-notes');
+  const wrap = (before, after) => {
+    const s = ta.selectionStart, e = ta.selectionEnd, sel = ta.value.slice(s, e);
+    ta.value = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e);
+    ta.focus();
+    ta.selectionStart = s + before.length;
+    ta.selectionEnd = e + before.length + sel.length;
+  };
+  const linePrefix = makePrefix => {
+    const s = ta.selectionStart, e = ta.selectionEnd, val = ta.value;
+    const start = val.lastIndexOf('\n', s - 1) + 1;
+    let end = val.indexOf('\n', e); if (end < 0) end = val.length;
+    const block = val.slice(start, end).split('\n').map(makePrefix).join('\n');
+    ta.value = val.slice(0, start) + block + val.slice(end);
+    ta.focus();
+  };
+  document.getElementById('rte-toolbar').addEventListener('click', e => {
+    const btn = e.target.closest('.rte-btn');
+    if (!btn) return;
+    switch (btn.dataset.md) {
+      case 'bold':   wrap('**', '**'); break;
+      case 'italic': wrap('*', '*'); break;
+      case 'h':      linePrefix(l => '### ' + l.replace(/^#{1,6}\s*/, '')); break;
+      case 'ul':     linePrefix(l => '- ' + l.replace(/^\s*[-*]\s+/, '')); break;
+      case 'ol':     { let k = 1; linePrefix(l => (k++) + '. ' + l.replace(/^\s*\d+\.\s+/, '')); break; }
+      case 'link': {
+        const url = prompt('Link URL:', 'https://');
+        if (!url) return;
+        const s = ta.selectionStart, e = ta.selectionEnd, sel = ta.value.slice(s, e) || 'link';
+        ta.value = ta.value.slice(0, s) + `[${sel}](${url})` + ta.value.slice(e);
+        ta.focus();
+        break;
+      }
+    }
+  });
+})();
 
 const gpxInput = document.getElementById('gpx-input');
 gpxInput.addEventListener('change', async e => {
@@ -1363,6 +1599,8 @@ function renderRoute(trip) {
         maxZoom: 18,
         attribution: '&copy; OpenStreetMap contributors',
       }).addTo(tripMap);
+      tripMap.on('mousemove', onMapHover);   // reverse link: map → elevation chart
+      tripMap.on('mouseout', clearElevationHover);
     }
     if (trackLayer) { trackLayer.remove(); trackLayer = null; }
     const layers = [];
@@ -1379,8 +1617,11 @@ function renderRoute(trip) {
       allBounds = allBounds ? allBounds.extend(b) : b;
     });
     trackLayer = L.layerGroup(layers).addTo(tripMap);
-    if (allBounds) tripMap.fitBounds(allBounds, { padding: [20, 20] });
-    setTimeout(() => tripMap.invalidateSize(), 0); // container may have been hidden when created
+    const fit = () => { if (allBounds) tripMap.fitBounds(allBounds, { padding: [20, 20], maxZoom: 16 }); };
+    fit();
+    // Container may have been hidden (0px) when first drawn, which makes the
+    // initial fit wrong — recompute size then re-fit once it's visible.
+    setTimeout(() => { tripMap.invalidateSize(); fit(); }, 0);
   }
 
   // Summary stats across all tracks
@@ -1451,12 +1692,12 @@ function renderElevation(tracks) {
     for (let j = 1; j < tk.points.length; j++) dists.push(dists[j - 1] + haversine(tk.points[j - 1], tk.points[j]));
     profiles.push({ track: tk, color: trackColor(i), eles, dists });
   });
-  if (!profiles.length) { wrap.classList.add('hidden'); svg.innerHTML = ''; return; }
+  if (!profiles.length) { wrap.classList.add('hidden'); svg.innerHTML = ''; elevationState = null; clearElevationHover(); return; }
   wrap.classList.remove('hidden');
 
   // Plot geometry (user units; SVG scales uniformly so text isn't distorted)
-  const VB_W = 1000, VB_H = 260;
-  const M = { l: 62, r: 16, t: 14, b: 46 };
+  const VB_W = 1000, VB_H = 170;
+  const M = { l: 46, r: 10, t: 10, b: 26 };
   const plotW = VB_W - M.l - M.r;
   const plotH = VB_H - M.t - M.b;
 
@@ -1465,30 +1706,27 @@ function renderElevation(tracks) {
   profiles.forEach(pr => pr.eles.forEach(e => { if (e < minE) minE = e; if (e > maxE) maxE = e; }));
   const maxDist = Math.max(...profiles.map(pr => pr.dists[pr.dists.length - 1] || 0)) || 1;
 
-  const yScale = niceScale(minE, maxE, 4);
-  const xScale = niceScale(0, maxDist, 5);
+  const yScale = niceScale(minE, maxE, 3);
+  const xScale = niceScale(0, maxDist, 4);
   const xOf = d => M.l + (d / xScale.hi) * plotW;
   const yOf = e => M.t + (1 - (e - yScale.lo) / ((yScale.hi - yScale.lo) || 1)) * plotH;
   const baseY = M.t + plotH;
 
-  // Grid + axis ticks
-  const yGrid = yScale.ticks.map(v => {
+  // Minimal: light horizontal gridlines, compact labels with the unit only on the end tick
+  const yGrid = yScale.ticks.map((v, idx) => {
     const y = yOf(v);
+    const label = idx === yScale.ticks.length - 1 ? `${v.toLocaleString()} m` : v.toLocaleString();
     return `<line class="elev-grid" x1="${M.l}" y1="${y.toFixed(1)}" x2="${M.l + plotW}" y2="${y.toFixed(1)}" />`
-      + `<text class="elev-tick-label" x="${M.l - 8}" y="${(y + 5).toFixed(1)}" text-anchor="end">${v.toLocaleString()}</text>`;
+      + `<text class="elev-tick-label" x="${M.l - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end">${label}</text>`;
   }).join('');
-  const xTicks = xScale.ticks.map(v => {
+  const xTicks = xScale.ticks.map((v, idx) => {
     const x = xOf(v);
-    return `<line class="elev-grid" x1="${x.toFixed(1)}" y1="${baseY}" x2="${x.toFixed(1)}" y2="${baseY + 5}" />`
-      + `<text class="elev-tick-label" x="${x.toFixed(1)}" y="${baseY + 24}" text-anchor="middle">${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text>`;
+    const last = idx === xScale.ticks.length - 1;
+    const km = (v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
+    const label = last ? `${km} km` : km;
+    const anchor = idx === 0 ? 'start' : last ? 'end' : 'middle';
+    return `<text class="elev-tick-label" x="${x.toFixed(1)}" y="${(baseY + 17).toFixed(1)}" text-anchor="${anchor}">${label}</text>`;
   }).join('');
-
-  const axes =
-    `<line class="elev-axis" x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${baseY}" />` +
-    `<line class="elev-axis" x1="${M.l}" y1="${baseY}" x2="${M.l + plotW}" y2="${baseY}" />`;
-  const titles =
-    `<text class="elev-axis-title" x="${M.l + plotW / 2}" y="${VB_H - 4}" text-anchor="middle">Distance (km)</text>` +
-    `<text class="elev-axis-title" transform="translate(16,${M.t + plotH / 2}) rotate(-90)" text-anchor="middle">Elevation (m)</text>`;
 
   const single = profiles.length === 1;
   const series = profiles.map(pr => {
@@ -1502,8 +1740,116 @@ function renderElevation(tracks) {
     return `${area}<polyline class="elev-line" points="${line}" style="stroke:${pr.color}" />`;
   }).join('');
 
-  svg.innerHTML = yGrid + xTicks + axes + series + titles;
+  svg.setAttribute('viewBox', `0 0 ${VB_W} ${VB_H}`);
+  svg.innerHTML = yGrid + xTicks + series;
+
+  // Keep geometry/scales so the hover handler can map chart x → map position
+  elevationState = { profiles, xScale, yScale, xOf, yOf, geom: { M, plotW, plotH, baseY, VB_W, VB_H } };
+  clearElevationHover();
 }
+
+// ── Linked elevation ↔ map hover ──
+function clearElevationHover() {
+  document.getElementById('elev-hover')?.remove();
+  document.getElementById('elev-tooltip')?.classList.add('hidden');
+  if (hoverLayer) { hoverLayer.remove(); hoverLayer = null; }
+}
+
+// Draw the guide + dots on the chart and matching markers on the map for the
+// given picks ([{pr, j}]). Shared by both the forward and reverse hovers.
+function drawElevationHover(x, picks) {
+  if (!elevationState) return;
+  const svg = document.getElementById('elevation-profile');
+  const { xScale, yScale, xOf, yOf, geom } = elevationState;
+  const NS = 'http://www.w3.org/2000/svg';
+  document.getElementById('elev-hover')?.remove();
+  const g = document.createElementNS(NS, 'g');
+  g.id = 'elev-hover';
+  const guide = document.createElementNS(NS, 'line');
+  guide.setAttribute('class', 'elev-guide');
+  guide.setAttribute('x1', x); guide.setAttribute('x2', x);
+  guide.setAttribute('y1', geom.M.t); guide.setAttribute('y2', geom.baseY);
+  g.appendChild(guide);
+
+  if (tripMap) { if (hoverLayer) hoverLayer.remove(); hoverLayer = L.layerGroup().addTo(tripMap); }
+
+  const rows = [];
+  picks.forEach(({ pr, j }) => {
+    const p = pr.track.points[j];
+    const ele = Number.isFinite(p[2]) ? p[2] : null;
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('class', 'elev-dot');
+    dot.setAttribute('cx', xOf(pr.dists[j]).toFixed(1));
+    dot.setAttribute('cy', yOf(ele == null ? yScale.lo : ele).toFixed(1));
+    dot.setAttribute('r', 3.5);
+    dot.setAttribute('fill', pr.color);
+    g.appendChild(dot);
+    if (hoverLayer) {
+      L.circleMarker([p[0], p[1]], { radius: 6, color: '#fff', weight: 2, fillColor: pr.color, fillOpacity: 1 }).addTo(hoverLayer);
+    }
+    rows.push({ color: pr.color, ele });
+  });
+  svg.appendChild(g);
+
+  // Tooltip
+  const dist = (x - geom.M.l) / geom.plotW * xScale.hi;
+  const tt = document.getElementById('elev-tooltip');
+  const rect = svg.getBoundingClientRect();
+  const wrap = document.getElementById('elevation-wrap');
+  const pxX = (x / geom.VB_W) * rect.width + (rect.left - wrap.getBoundingClientRect().left);
+  tt.style.left = `${pxX}px`;
+  tt.style.top = `${svg.offsetTop + 4}px`;
+  tt.innerHTML = `<div class="ett-dist">${(dist / 1000).toFixed(2)} km</div>` +
+    rows.map(r => `<div class="ett-row"><span class="ett-sw" style="background:${r.color}"></span>${r.ele != null ? r.ele.toLocaleString() + ' m' : '—'}</div>`).join('');
+  tt.classList.remove('hidden');
+}
+
+// Forward: hover the chart → mark the map
+function onElevationHover(ev) {
+  if (!elevationState) return;
+  const svg = document.getElementById('elevation-profile');
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width) return;
+  const { profiles, xScale, geom } = elevationState;
+  const ux = (ev.clientX - rect.left) / rect.width * geom.VB_W;
+  const x = Math.max(geom.M.l, Math.min(geom.M.l + geom.plotW, ux));
+  const dist = (x - geom.M.l) / geom.plotW * xScale.hi;
+  const picks = [];
+  profiles.forEach(pr => {
+    if (dist > pr.dists[pr.dists.length - 1] + 1) return;
+    let j = 0, best = Infinity;
+    for (let k = 0; k < pr.dists.length; k++) { const d = Math.abs(pr.dists[k] - dist); if (d < best) { best = d; j = k; } }
+    picks.push({ pr, j });
+  });
+  drawElevationHover(x, picks);
+}
+
+// Reverse: hover the map → highlight the nearest spot on the chart
+function onMapHover(e) {
+  if (!elevationState || !tripMap) return;
+  const ll = e.latlng;
+  let best = null;
+  elevationState.profiles.forEach(pr => {
+    const pts = pr.track.points;
+    for (let j = 0; j < pts.length; j++) {
+      const dLat = pts[j][0] - ll.lat, dLng = pts[j][1] - ll.lng;
+      const d2 = dLat * dLat + dLng * dLng;
+      if (!best || d2 < best.d2) best = { d2, pr, j };
+    }
+  });
+  if (!best) return;
+  // Only react when the cursor is actually near the route (screen pixels)
+  const p = best.pr.track.points[best.j];
+  const distPx = tripMap.latLngToContainerPoint(ll).distanceTo(tripMap.latLngToContainerPoint(L.latLng(p[0], p[1])));
+  if (distPx > 30) { clearElevationHover(); return; }
+  drawElevationHover(elevationState.xOf(best.pr.dists[best.j]), [{ pr: best.pr, j: best.j }]);
+}
+
+(function () {
+  const svg = document.getElementById('elevation-profile');
+  svg.addEventListener('pointermove', onElevationHover);
+  svg.addEventListener('pointerleave', clearElevationHover);
+})();
 
 function renderPackSection(trip) {
   const packs    = trip.packs || [];

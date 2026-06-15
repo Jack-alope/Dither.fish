@@ -15,7 +15,7 @@
   <meta name="apple-mobile-web-app-title" content="Dither" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 
@@ -197,6 +197,13 @@
   </div>
 
   <!-- ───── APP ───── -->
+  <div id="public-error" class="public-error hidden">
+    <img src="/favicons/icon.svg" alt="Dither.fish" class="public-error-logo" />
+    <h1>Trip not available</h1>
+    <p>This trip is private or the link is no longer valid.</p>
+    <a class="btn-primary" href="/">Go to Dither.fish</a>
+  </div>
+
   <div id="app" class="hidden">
     <header>
       <div class="header-inner">
@@ -284,18 +291,25 @@
             <h2 id="trip-detail-name"></h2>
             <div class="trip-actions">
               <button class="btn-primary" id="btn-open-picker">+ Add Gear</button>
+              <button class="btn-secondary" id="btn-toggle-public">Make Public</button>
               <button class="btn-secondary" id="btn-edit-trip">Edit</button>
               <button class="btn-secondary" id="btn-archive-trip">Archive</button>
               <button class="btn-danger" id="btn-delete-trip">Delete Trip</button>
             </div>
           </div>
+          <p class="public-note hidden" id="public-note">📍 Shared trip · view only — <a href="/">make your own at dither.fish</a></p>
           <p class="trip-meta" id="trip-detail-meta"></p>
           <p class="trip-detail-notes hidden" id="trip-detail-notes"></p>
+          <div class="trip-share hidden" id="trip-share">
+            <span class="trip-share-label">🔗 Public link</span>
+            <input type="text" id="trip-share-link" class="trip-share-input" readonly />
+            <button class="btn-secondary" id="btn-copy-share">Copy</button>
+          </div>
 
           <!-- Trip sub-pages: Pack / Route -->
           <div class="trip-subnav">
-            <button class="trip-subnav-btn active" data-trip-page="pack">Pack</button>
-            <button class="trip-subnav-btn" data-trip-page="route">Route</button>
+            <button class="trip-subnav-btn active" data-trip-page="route">Route</button>
+            <button class="trip-subnav-btn" data-trip-page="pack">Pack</button>
           </div>
 
           <!-- Pack page -->
@@ -310,14 +324,6 @@
 
           <!-- Route page (GPX) -->
           <div id="trip-page-route" class="trip-page hidden">
-            <div class="route-notes-section">
-              <div class="route-header">
-                <h3>Description</h3>
-                <span class="route-notes-status" id="route-notes-status"></span>
-              </div>
-              <textarea id="route-notes" class="route-notes-input" rows="5"
-                placeholder="Notes about the hike — daily plan, mileage, campsites, water sources, permits…"></textarea>
-            </div>
             <div class="trip-route-section">
               <div class="route-header">
                 <h3>Route</h3>
@@ -331,11 +337,45 @@
               <p class="route-empty" id="route-empty">No route yet — upload one or more GPX files to see them on the map.</p>
               <div id="route-view" class="hidden">
                 <div id="trip-map" class="trip-map"></div>
-                <div class="route-stats" id="route-stats"></div>
-                <ul class="route-track-list" id="route-track-list"></ul>
                 <div class="elevation-wrap hidden" id="elevation-wrap">
                   <div class="elevation-label">Elevation</div>
-                  <svg id="elevation-profile" class="elevation-profile" viewBox="0 0 1000 260"></svg>
+                  <svg id="elevation-profile" class="elevation-profile" viewBox="0 0 1000 170"></svg>
+                  <div class="elev-tooltip hidden" id="elev-tooltip"></div>
+                </div>
+                <div class="route-stats" id="route-stats"></div>
+                <ul class="route-track-list" id="route-track-list"></ul>
+              </div>
+            </div>
+
+            <div class="route-notes-section">
+              <div class="route-header">
+                <h3>Description</h3>
+                <div class="route-notes-actions">
+                  <span class="route-notes-status" id="route-notes-status"></span>
+                  <button type="button" class="btn-secondary hidden" id="btn-edit-notes">Edit</button>
+                </div>
+              </div>
+
+              <!-- Rendered (blog-style) view -->
+              <div id="route-notes-view" class="route-notes-rendered hidden"></div>
+              <p class="route-notes-empty" id="route-notes-empty">No description yet.</p>
+
+              <!-- Editor -->
+              <div id="route-notes-editor" class="hidden">
+                <div class="rte-toolbar" id="rte-toolbar">
+                  <button type="button" class="rte-btn" data-md="h" title="Heading">H</button>
+                  <button type="button" class="rte-btn" data-md="bold" title="Bold"><b>B</b></button>
+                  <button type="button" class="rte-btn" data-md="italic" title="Italic"><i>I</i></button>
+                  <button type="button" class="rte-btn" data-md="link" title="Insert link">🔗</button>
+                  <span class="rte-sep"></span>
+                  <button type="button" class="rte-btn" data-md="ul" title="Bulleted list">• List</button>
+                  <button type="button" class="rte-btn" data-md="ol" title="Numbered list">1. List</button>
+                </div>
+                <textarea id="route-notes" class="route-notes-input" rows="8"
+                  placeholder="Write in Markdown — # Heading, **bold**, *italic*, - list, [link](https://…)"></textarea>
+                <div class="route-notes-editbtns">
+                  <button type="button" class="btn-primary" id="btn-save-notes">Save</button>
+                  <button type="button" class="btn-secondary" id="btn-cancel-notes">Cancel</button>
                 </div>
               </div>
             </div>

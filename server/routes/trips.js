@@ -1,8 +1,22 @@
+const crypto = require('crypto');
 const router = require('express').Router();
 const auth   = require('../middleware/auth');
 const Trip   = require('../models/Trip');
 
 router.use(auth);
+
+// Toggle public sharing; generates an unguessable publicId the first time
+router.put('/:id/share', async (req, res) => {
+  try {
+    const makePublic = !!req.body.public;
+    const existing = await Trip.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    existing.public = makePublic;
+    if (makePublic && !existing.publicId) existing.publicId = crypto.randomUUID();
+    await existing.save();
+    res.json(existing);
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
 
 router.get('/', async (req, res) => {
   try {

@@ -74,6 +74,8 @@ const tripSchema = new mongoose.Schema({
   pack:          { type: [packItemSchema], default: [] },
   packs:         { type: [packSchema], default: [] },
   archived:      { type: Boolean, default: false },
+  public:        { type: Boolean, default: false },     // view-only sharing
+  publicId:      { type: String, default: '', index: true }, // unguessable share token
   track:         { type: trackSchema, default: null },  // legacy single track (kept for back-compat)
   tracks:        { type: [trackSchema], default: [] },
   routeNotes:    { type: String, default: '' },         // free-text hike description (days, camping, etc.)
