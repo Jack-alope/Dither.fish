@@ -1068,7 +1068,7 @@ document.addEventListener('keydown', e => {
 function showTripDetail(id) {
   currentTripId   = id;
   currentPackIdx  = 0;
-  currentTripPage = 'pack'; // every trip opens on the Pack page
+  currentTripPage = 'route'; // every trip opens on the Route page
   routeNotesEditing = false;
   hiddenTrackIds.clear();   // reset map visibility toggles per trip
   closePicker();
@@ -1078,7 +1078,7 @@ function showTripDetail(id) {
 }
 
 // ── Trip sub-pages (Pack / Route) ──
-let currentTripPage = 'pack';
+let currentTripPage = 'route';
 function setTripPage(page) {
   currentTripPage = page;
   document.getElementById('trip-page-pack').classList.toggle('hidden', page !== 'pack');
@@ -1136,6 +1136,8 @@ function renderTripDetail() {
 // ── Trip route / GPX ─────────────────────────────────────────────────────────
 let tripMap = null;
 let trackLayer = null;
+let hoverLayer = null;        // map markers shown while hovering the elevation chart
+let elevationState = null;    // geometry/scales of the last-rendered elevation chart
 const hiddenTrackIds = new Set(); // tracks toggled off the map (view state, not persisted)
 
 const MAX_TRACK_POINTS = 2000;
@@ -1520,6 +1522,8 @@ function renderRoute(trip) {
         maxZoom: 18,
         attribution: '&copy; OpenStreetMap contributors',
       }).addTo(tripMap);
+      tripMap.on('mousemove', onMapHover);   // reverse link: map → elevation chart
+      tripMap.on('mouseout', clearElevationHover);
     }
     if (trackLayer) { trackLayer.remove(); trackLayer = null; }
     const layers = [];
@@ -1611,12 +1615,12 @@ function renderElevation(tracks) {
     for (let j = 1; j < tk.points.length; j++) dists.push(dists[j - 1] + haversine(tk.points[j - 1], tk.points[j]));
     profiles.push({ track: tk, color: trackColor(i), eles, dists });
   });
-  if (!profiles.length) { wrap.classList.add('hidden'); svg.innerHTML = ''; return; }
+  if (!profiles.length) { wrap.classList.add('hidden'); svg.innerHTML = ''; elevationState = null; clearElevationHover(); return; }
   wrap.classList.remove('hidden');
 
   // Plot geometry (user units; SVG scales uniformly so text isn't distorted)
-  const VB_W = 1000, VB_H = 260;
-  const M = { l: 62, r: 16, t: 14, b: 46 };
+  const VB_W = 1000, VB_H = 170;
+  const M = { l: 46, r: 10, t: 10, b: 26 };
   const plotW = VB_W - M.l - M.r;
   const plotH = VB_H - M.t - M.b;
 
@@ -1625,30 +1629,27 @@ function renderElevation(tracks) {
   profiles.forEach(pr => pr.eles.forEach(e => { if (e < minE) minE = e; if (e > maxE) maxE = e; }));
   const maxDist = Math.max(...profiles.map(pr => pr.dists[pr.dists.length - 1] || 0)) || 1;
 
-  const yScale = niceScale(minE, maxE, 4);
-  const xScale = niceScale(0, maxDist, 5);
+  const yScale = niceScale(minE, maxE, 3);
+  const xScale = niceScale(0, maxDist, 4);
   const xOf = d => M.l + (d / xScale.hi) * plotW;
   const yOf = e => M.t + (1 - (e - yScale.lo) / ((yScale.hi - yScale.lo) || 1)) * plotH;
   const baseY = M.t + plotH;
 
-  // Grid + axis ticks
-  const yGrid = yScale.ticks.map(v => {
+  // Minimal: light horizontal gridlines, compact labels with the unit only on the end tick
+  const yGrid = yScale.ticks.map((v, idx) => {
     const y = yOf(v);
+    const label = idx === yScale.ticks.length - 1 ? `${v.toLocaleString()} m` : v.toLocaleString();
     return `<line class="elev-grid" x1="${M.l}" y1="${y.toFixed(1)}" x2="${M.l + plotW}" y2="${y.toFixed(1)}" />`
-      + `<text class="elev-tick-label" x="${M.l - 8}" y="${(y + 5).toFixed(1)}" text-anchor="end">${v.toLocaleString()}</text>`;
+      + `<text class="elev-tick-label" x="${M.l - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end">${label}</text>`;
   }).join('');
-  const xTicks = xScale.ticks.map(v => {
+  const xTicks = xScale.ticks.map((v, idx) => {
     const x = xOf(v);
-    return `<line class="elev-grid" x1="${x.toFixed(1)}" y1="${baseY}" x2="${x.toFixed(1)}" y2="${baseY + 5}" />`
-      + `<text class="elev-tick-label" x="${x.toFixed(1)}" y="${baseY + 24}" text-anchor="middle">${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}</text>`;
+    const last = idx === xScale.ticks.length - 1;
+    const km = (v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 });
+    const label = last ? `${km} km` : km;
+    const anchor = idx === 0 ? 'start' : last ? 'end' : 'middle';
+    return `<text class="elev-tick-label" x="${x.toFixed(1)}" y="${(baseY + 17).toFixed(1)}" text-anchor="${anchor}">${label}</text>`;
   }).join('');
-
-  const axes =
-    `<line class="elev-axis" x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${baseY}" />` +
-    `<line class="elev-axis" x1="${M.l}" y1="${baseY}" x2="${M.l + plotW}" y2="${baseY}" />`;
-  const titles =
-    `<text class="elev-axis-title" x="${M.l + plotW / 2}" y="${VB_H - 4}" text-anchor="middle">Distance (km)</text>` +
-    `<text class="elev-axis-title" transform="translate(16,${M.t + plotH / 2}) rotate(-90)" text-anchor="middle">Elevation (m)</text>`;
 
   const single = profiles.length === 1;
   const series = profiles.map(pr => {
@@ -1662,8 +1663,116 @@ function renderElevation(tracks) {
     return `${area}<polyline class="elev-line" points="${line}" style="stroke:${pr.color}" />`;
   }).join('');
 
-  svg.innerHTML = yGrid + xTicks + axes + series + titles;
+  svg.setAttribute('viewBox', `0 0 ${VB_W} ${VB_H}`);
+  svg.innerHTML = yGrid + xTicks + series;
+
+  // Keep geometry/scales so the hover handler can map chart x → map position
+  elevationState = { profiles, xScale, yScale, xOf, yOf, geom: { M, plotW, plotH, baseY, VB_W, VB_H } };
+  clearElevationHover();
 }
+
+// ── Linked elevation ↔ map hover ──
+function clearElevationHover() {
+  document.getElementById('elev-hover')?.remove();
+  document.getElementById('elev-tooltip')?.classList.add('hidden');
+  if (hoverLayer) { hoverLayer.remove(); hoverLayer = null; }
+}
+
+// Draw the guide + dots on the chart and matching markers on the map for the
+// given picks ([{pr, j}]). Shared by both the forward and reverse hovers.
+function drawElevationHover(x, picks) {
+  if (!elevationState) return;
+  const svg = document.getElementById('elevation-profile');
+  const { xScale, yScale, xOf, yOf, geom } = elevationState;
+  const NS = 'http://www.w3.org/2000/svg';
+  document.getElementById('elev-hover')?.remove();
+  const g = document.createElementNS(NS, 'g');
+  g.id = 'elev-hover';
+  const guide = document.createElementNS(NS, 'line');
+  guide.setAttribute('class', 'elev-guide');
+  guide.setAttribute('x1', x); guide.setAttribute('x2', x);
+  guide.setAttribute('y1', geom.M.t); guide.setAttribute('y2', geom.baseY);
+  g.appendChild(guide);
+
+  if (tripMap) { if (hoverLayer) hoverLayer.remove(); hoverLayer = L.layerGroup().addTo(tripMap); }
+
+  const rows = [];
+  picks.forEach(({ pr, j }) => {
+    const p = pr.track.points[j];
+    const ele = Number.isFinite(p[2]) ? p[2] : null;
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('class', 'elev-dot');
+    dot.setAttribute('cx', xOf(pr.dists[j]).toFixed(1));
+    dot.setAttribute('cy', yOf(ele == null ? yScale.lo : ele).toFixed(1));
+    dot.setAttribute('r', 3.5);
+    dot.setAttribute('fill', pr.color);
+    g.appendChild(dot);
+    if (hoverLayer) {
+      L.circleMarker([p[0], p[1]], { radius: 6, color: '#fff', weight: 2, fillColor: pr.color, fillOpacity: 1 }).addTo(hoverLayer);
+    }
+    rows.push({ color: pr.color, ele });
+  });
+  svg.appendChild(g);
+
+  // Tooltip
+  const dist = (x - geom.M.l) / geom.plotW * xScale.hi;
+  const tt = document.getElementById('elev-tooltip');
+  const rect = svg.getBoundingClientRect();
+  const wrap = document.getElementById('elevation-wrap');
+  const pxX = (x / geom.VB_W) * rect.width + (rect.left - wrap.getBoundingClientRect().left);
+  tt.style.left = `${pxX}px`;
+  tt.style.top = `${svg.offsetTop + 4}px`;
+  tt.innerHTML = `<div class="ett-dist">${(dist / 1000).toFixed(2)} km</div>` +
+    rows.map(r => `<div class="ett-row"><span class="ett-sw" style="background:${r.color}"></span>${r.ele != null ? r.ele.toLocaleString() + ' m' : '—'}</div>`).join('');
+  tt.classList.remove('hidden');
+}
+
+// Forward: hover the chart → mark the map
+function onElevationHover(ev) {
+  if (!elevationState) return;
+  const svg = document.getElementById('elevation-profile');
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width) return;
+  const { profiles, xScale, geom } = elevationState;
+  const ux = (ev.clientX - rect.left) / rect.width * geom.VB_W;
+  const x = Math.max(geom.M.l, Math.min(geom.M.l + geom.plotW, ux));
+  const dist = (x - geom.M.l) / geom.plotW * xScale.hi;
+  const picks = [];
+  profiles.forEach(pr => {
+    if (dist > pr.dists[pr.dists.length - 1] + 1) return;
+    let j = 0, best = Infinity;
+    for (let k = 0; k < pr.dists.length; k++) { const d = Math.abs(pr.dists[k] - dist); if (d < best) { best = d; j = k; } }
+    picks.push({ pr, j });
+  });
+  drawElevationHover(x, picks);
+}
+
+// Reverse: hover the map → highlight the nearest spot on the chart
+function onMapHover(e) {
+  if (!elevationState || !tripMap) return;
+  const ll = e.latlng;
+  let best = null;
+  elevationState.profiles.forEach(pr => {
+    const pts = pr.track.points;
+    for (let j = 0; j < pts.length; j++) {
+      const dLat = pts[j][0] - ll.lat, dLng = pts[j][1] - ll.lng;
+      const d2 = dLat * dLat + dLng * dLng;
+      if (!best || d2 < best.d2) best = { d2, pr, j };
+    }
+  });
+  if (!best) return;
+  // Only react when the cursor is actually near the route (screen pixels)
+  const p = best.pr.track.points[best.j];
+  const distPx = tripMap.latLngToContainerPoint(ll).distanceTo(tripMap.latLngToContainerPoint(L.latLng(p[0], p[1])));
+  if (distPx > 30) { clearElevationHover(); return; }
+  drawElevationHover(elevationState.xOf(best.pr.dists[best.j]), [{ pr: best.pr, j: best.j }]);
+}
+
+(function () {
+  const svg = document.getElementById('elevation-profile');
+  svg.addEventListener('pointermove', onElevationHover);
+  svg.addEventListener('pointerleave', clearElevationHover);
+})();
 
 function renderPackSection(trip) {
   const packs    = trip.packs || [];

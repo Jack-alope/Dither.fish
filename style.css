@@ -1430,7 +1430,26 @@ main {
 .route-track .route-track-dl:hover,
 .route-track .route-track-rn:hover { color: var(--accent); background: var(--accent-light); }
 .route-track .route-track-rm:hover { color: var(--danger); background: #fdecea; }
-.elevation-wrap { margin-top: 1rem; }
+.elevation-wrap { margin-top: 1rem; position: relative; }
+.elevation-profile { touch-action: none; }
+.elevation-profile .elev-guide { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.elevation-profile .elev-dot { stroke: #fff; stroke-width: 1.5; }
+.elev-tooltip {
+  position: absolute;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
+.elev-tooltip .ett-dist { font-weight: 700; margin-bottom: 0.1rem; }
+.elev-tooltip .ett-row { display: flex; align-items: center; gap: 0.35rem; }
+.elev-tooltip .ett-sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 .elevation-label {
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -1442,16 +1461,11 @@ main {
   width: 100%;
   height: auto;
   display: block;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
-.elevation-profile .elev-area { fill: var(--accent-light); }
-.elevation-profile .elev-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
-.elevation-profile .elev-axis { stroke: var(--border); stroke-width: 1.5; }
-.elevation-profile .elev-grid { stroke: var(--border); stroke-width: 1; opacity: 0.5; }
-.elevation-profile .elev-tick-label { fill: var(--text-muted); font-size: 16px; font-family: inherit; }
-.elevation-profile .elev-axis-title { fill: var(--text-muted); font-size: 17px; font-weight: 600; font-family: inherit; }
+.elevation-profile .elev-area { fill: var(--accent-light); opacity: 0.6; }
+.elevation-profile .elev-line { fill: none; stroke: var(--accent); stroke-width: 1.75; vector-effect: non-scaling-stroke; }
+.elevation-profile .elev-grid { stroke: var(--border); stroke-width: 1; opacity: 0.4; }
+.elevation-profile .elev-tick-label { fill: var(--text-muted); font-size: 13px; font-family: inherit; }
 
 .pack-tabs {
   display: flex;

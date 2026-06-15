@@ -294,8 +294,8 @@
 
           <!-- Trip sub-pages: Pack / Route -->
           <div class="trip-subnav">
-            <button class="trip-subnav-btn active" data-trip-page="pack">Pack</button>
-            <button class="trip-subnav-btn" data-trip-page="route">Route</button>
+            <button class="trip-subnav-btn active" data-trip-page="route">Route</button>
+            <button class="trip-subnav-btn" data-trip-page="pack">Pack</button>
           </div>
 
           <!-- Pack page -->
@@ -323,12 +323,13 @@
               <p class="route-empty" id="route-empty">No route yet — upload one or more GPX files to see them on the map.</p>
               <div id="route-view" class="hidden">
                 <div id="trip-map" class="trip-map"></div>
-                <div class="route-stats" id="route-stats"></div>
-                <ul class="route-track-list" id="route-track-list"></ul>
                 <div class="elevation-wrap hidden" id="elevation-wrap">
                   <div class="elevation-label">Elevation</div>
-                  <svg id="elevation-profile" class="elevation-profile" viewBox="0 0 1000 260"></svg>
+                  <svg id="elevation-profile" class="elevation-profile" viewBox="0 0 1000 170"></svg>
+                  <div class="elev-tooltip hidden" id="elev-tooltip"></div>
                 </div>
+                <div class="route-stats" id="route-stats"></div>
+                <ul class="route-track-list" id="route-track-list"></ul>
               </div>
             </div>
 
