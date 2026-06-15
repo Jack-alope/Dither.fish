@@ -310,14 +310,6 @@
 
           <!-- Route page (GPX) -->
           <div id="trip-page-route" class="trip-page hidden">
-            <div class="route-notes-section">
-              <div class="route-header">
-                <h3>Description</h3>
-                <span class="route-notes-status" id="route-notes-status"></span>
-              </div>
-              <textarea id="route-notes" class="route-notes-input" rows="5"
-                placeholder="Notes about the hike — daily plan, mileage, campsites, water sources, permits…"></textarea>
-            </div>
             <div class="trip-route-section">
               <div class="route-header">
                 <h3>Route</h3>
@@ -336,6 +328,39 @@
                 <div class="elevation-wrap hidden" id="elevation-wrap">
                   <div class="elevation-label">Elevation</div>
                   <svg id="elevation-profile" class="elevation-profile" viewBox="0 0 1000 260"></svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="route-notes-section">
+              <div class="route-header">
+                <h3>Description</h3>
+                <div class="route-notes-actions">
+                  <span class="route-notes-status" id="route-notes-status"></span>
+                  <button type="button" class="btn-secondary hidden" id="btn-edit-notes">Edit</button>
+                </div>
+              </div>
+
+              <!-- Rendered (blog-style) view -->
+              <div id="route-notes-view" class="route-notes-rendered hidden"></div>
+              <p class="route-notes-empty" id="route-notes-empty">No description yet.</p>
+
+              <!-- Editor -->
+              <div id="route-notes-editor" class="hidden">
+                <div class="rte-toolbar" id="rte-toolbar">
+                  <button type="button" class="rte-btn" data-md="h" title="Heading">H</button>
+                  <button type="button" class="rte-btn" data-md="bold" title="Bold"><b>B</b></button>
+                  <button type="button" class="rte-btn" data-md="italic" title="Italic"><i>I</i></button>
+                  <button type="button" class="rte-btn" data-md="link" title="Insert link">🔗</button>
+                  <span class="rte-sep"></span>
+                  <button type="button" class="rte-btn" data-md="ul" title="Bulleted list">• List</button>
+                  <button type="button" class="rte-btn" data-md="ol" title="Numbered list">1. List</button>
+                </div>
+                <textarea id="route-notes" class="route-notes-input" rows="8"
+                  placeholder="Write in Markdown — # Heading, **bold**, *italic*, - list, [link](https://…)"></textarea>
+                <div class="route-notes-editbtns">
+                  <button type="button" class="btn-primary" id="btn-save-notes">Save</button>
+                  <button type="button" class="btn-secondary" id="btn-cancel-notes">Cancel</button>
                 </div>
               </div>
             </div>

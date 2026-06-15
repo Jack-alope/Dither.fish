@@ -1069,6 +1069,7 @@ function showTripDetail(id) {
   currentTripId   = id;
   currentPackIdx  = 0;
   currentTripPage = 'pack'; // every trip opens on the Pack page
+  routeNotesEditing = false;
   hiddenTrackIds.clear();   // reset map visibility toggles per trip
   closePicker();
   tripListPanel.classList.add('hidden');
@@ -1219,23 +1220,135 @@ async function saveTracks(tracks) {
   } catch (err) { alert(err.message); }
 }
 
-// ── Route description (free-text notes about the hike) ──
+// ── Route description (Markdown source, blog-style rendered view) ──
+// Markdown is future-proof: no deprecated execCommand, portable, safe to render.
+let routeNotesEditing = false;
+
+function mdInline(s) {
+  s = esc(s); // escape HTML first, then add our own known-safe tags
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (m, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*(?!\s)([^*]+?)\*/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[^\w])_(?!\s)([^_]+?)_/g, '$1<em>$2</em>');
+  return s;
+}
+
+function mdToHtml(md) {
+  const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  let i = 0;
+  const isUl = l => /^\s*[-*]\s+/.test(l);
+  const isOl = l => /^\s*\d+\.\s+/.test(l);
+  const isH  = l => /^#{1,3}\s+/.test(l);
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    const h = /^(#{1,3})\s+(.*)$/.exec(line);
+    if (h) { out.push(`<h${h[1].length}>${mdInline(h[2].trim())}</h${h[1].length}>`); i++; continue; }
+    if (isUl(line)) {
+      const items = [];
+      while (i < lines.length && isUl(lines[i])) { items.push(`<li>${mdInline(lines[i].replace(/^\s*[-*]\s+/, '').trim())}</li>`); i++; }
+      out.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+    if (isOl(line)) {
+      const items = [];
+      while (i < lines.length && isOl(lines[i])) { items.push(`<li>${mdInline(lines[i].replace(/^\s*\d+\.\s+/, '').trim())}</li>`); i++; }
+      out.push(`<ol>${items.join('')}</ol>`); continue;
+    }
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !isH(lines[i]) && !isUl(lines[i]) && !isOl(lines[i])) { para.push(lines[i]); i++; }
+    out.push(`<p>${para.map(mdInline).join('<br>')}</p>`);
+  }
+  return out.join('');
+}
+
+// Convert any legacy HTML notes (from the earlier WYSIWYG editor) back to Markdown
+function htmlToMd(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const inline = node => {
+    let s = '';
+    node.childNodes.forEach(n => {
+      if (n.nodeType === 3) { s += n.textContent; return; }
+      if (n.nodeType !== 1) return;
+      const t = n.tagName, inner = inline(n);
+      if (t === 'B' || t === 'STRONG') s += `**${inner}**`;
+      else if (t === 'I' || t === 'EM') s += `*${inner}*`;
+      else if (t === 'A') s += `[${inner}](${n.getAttribute('href') || ''})`;
+      else if (t === 'BR') s += '\n';
+      else s += inner;
+    });
+    return s;
+  };
+  const blocks = [];
+  tmp.childNodes.forEach(n => {
+    if (n.nodeType === 3) { const t = n.textContent.trim(); if (t) blocks.push(t); return; }
+    if (n.nodeType !== 1) return;
+    const t = n.tagName;
+    if (/^H[1-3]$/.test(t)) blocks.push('#'.repeat(+t[1]) + ' ' + inline(n).trim());
+    else if (t === 'UL') n.querySelectorAll(':scope > li').forEach(li => blocks.push('- ' + inline(li).trim()));
+    else if (t === 'OL') { let k = 1; n.querySelectorAll(':scope > li').forEach(li => blocks.push((k++) + '. ' + inline(li).trim())); }
+    else blocks.push(inline(n).trim());
+  });
+  return blocks.filter(Boolean).join('\n\n');
+}
+
+function getRouteNotesMd(trip) {
+  const raw = trip.routeNotes || '';
+  if (raw && /<(h[1-3]|p|ul|ol|li|br|strong|b|em|i|a|div|span)\b/i.test(raw)) return htmlToMd(raw);
+  return raw;
+}
+
 function renderRouteNotes(trip) {
-  const el = document.getElementById('route-notes');
-  el.value = trip.routeNotes || '';
-  el.disabled = !!trip.archived;
+  const md       = getRouteNotesMd(trip);
+  const viewEl   = document.getElementById('route-notes-view');
+  const emptyEl  = document.getElementById('route-notes-empty');
+  const editorEl = document.getElementById('route-notes-editor');
+  const editBtn  = document.getElementById('btn-edit-notes');
+  const archived = !!trip.archived;
+  const hasContent = !!md.trim();
+
+  if (routeNotesEditing && !archived) {
+    editorEl.classList.remove('hidden');
+    viewEl.classList.add('hidden');
+    emptyEl.classList.add('hidden');
+    editBtn.classList.add('hidden');
+    return;
+  }
+
+  editorEl.classList.add('hidden');
+  viewEl.innerHTML = hasContent ? mdToHtml(md) : '';
+  viewEl.classList.toggle('hidden', !hasContent);
+  emptyEl.classList.toggle('hidden', hasContent);
+  emptyEl.textContent = archived ? 'No description.' : 'No description yet.';
+  editBtn.textContent = hasContent ? 'Edit' : 'Add description';
+  editBtn.classList.toggle('hidden', archived);
   document.getElementById('route-notes-status').textContent = '';
 }
 
-async function saveRouteNotes(text) {
+function enterRouteNotesEdit() {
   const trip = trips.find(t => t.id === currentTripId);
-  if (!trip || (trip.routeNotes || '') === text) return;
+  if (!trip || trip.archived) return;
+  routeNotesEditing = true;
+  document.getElementById('route-notes').value = getRouteNotesMd(trip);
+  renderRouteNotes(trip);
+  document.getElementById('route-notes').focus();
+}
+
+async function saveRouteNotes(md) {
+  const trip = trips.find(t => t.id === currentTripId);
+  if (!trip) return;
+  const val = (md || '').replace(/\s+$/,'');
+  if (getRouteNotesMd(trip) === val) { routeNotesEditing = false; renderRouteNotes(trip); return; }
   const statusEl = document.getElementById('route-notes-status');
   statusEl.textContent = 'Saving…';
   try {
-    const updated = normalizeTrip(await api(`/trips/${trip.id}`, { method: 'PUT', body: { routeNotes: text } }));
+    const updated = normalizeTrip(await api(`/trips/${trip.id}`, { method: 'PUT', body: { routeNotes: val } }));
     const idx = trips.findIndex(t => t.id === trip.id);
     if (idx >= 0) trips[idx] = updated;
+    routeNotesEditing = false;
+    renderRouteNotes(updated);
     statusEl.textContent = 'Saved';
     setTimeout(() => { if (statusEl.textContent === 'Saved') statusEl.textContent = ''; }, 2000);
   } catch (err) {
@@ -1244,8 +1357,52 @@ async function saveRouteNotes(text) {
   }
 }
 
-const routeNotesEl = document.getElementById('route-notes');
-routeNotesEl.addEventListener('blur', () => saveRouteNotes(routeNotesEl.value));
+document.getElementById('btn-edit-notes').addEventListener('click', enterRouteNotesEdit);
+document.getElementById('btn-save-notes').addEventListener('click', () => saveRouteNotes(document.getElementById('route-notes').value));
+document.getElementById('btn-cancel-notes').addEventListener('click', () => {
+  routeNotesEditing = false;
+  const trip = trips.find(t => t.id === currentTripId);
+  if (trip) renderRouteNotes(trip);
+});
+
+// Markdown toolbar — operates on the textarea selection
+(function () {
+  const ta = document.getElementById('route-notes');
+  const wrap = (before, after) => {
+    const s = ta.selectionStart, e = ta.selectionEnd, sel = ta.value.slice(s, e);
+    ta.value = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e);
+    ta.focus();
+    ta.selectionStart = s + before.length;
+    ta.selectionEnd = e + before.length + sel.length;
+  };
+  const linePrefix = makePrefix => {
+    const s = ta.selectionStart, e = ta.selectionEnd, val = ta.value;
+    const start = val.lastIndexOf('\n', s - 1) + 1;
+    let end = val.indexOf('\n', e); if (end < 0) end = val.length;
+    const block = val.slice(start, end).split('\n').map(makePrefix).join('\n');
+    ta.value = val.slice(0, start) + block + val.slice(end);
+    ta.focus();
+  };
+  document.getElementById('rte-toolbar').addEventListener('click', e => {
+    const btn = e.target.closest('.rte-btn');
+    if (!btn) return;
+    switch (btn.dataset.md) {
+      case 'bold':   wrap('**', '**'); break;
+      case 'italic': wrap('*', '*'); break;
+      case 'h':      linePrefix(l => '### ' + l.replace(/^#{1,6}\s*/, '')); break;
+      case 'ul':     linePrefix(l => '- ' + l.replace(/^\s*[-*]\s+/, '')); break;
+      case 'ol':     { let k = 1; linePrefix(l => (k++) + '. ' + l.replace(/^\s*\d+\.\s+/, '')); break; }
+      case 'link': {
+        const url = prompt('Link URL:', 'https://');
+        if (!url) return;
+        const s = ta.selectionStart, e = ta.selectionEnd, sel = ta.value.slice(s, e) || 'link';
+        ta.value = ta.value.slice(0, s) + `[${sel}](${url})` + ta.value.slice(e);
+        ta.focus();
+        break;
+      }
+    }
+  });
+})();
 
 const gpxInput = document.getElementById('gpx-input');
 gpxInput.addEventListener('change', async e => {
@@ -1379,8 +1536,11 @@ function renderRoute(trip) {
       allBounds = allBounds ? allBounds.extend(b) : b;
     });
     trackLayer = L.layerGroup(layers).addTo(tripMap);
-    if (allBounds) tripMap.fitBounds(allBounds, { padding: [20, 20] });
-    setTimeout(() => tripMap.invalidateSize(), 0); // container may have been hidden when created
+    const fit = () => { if (allBounds) tripMap.fitBounds(allBounds, { padding: [20, 20], maxZoom: 16 }); };
+    fit();
+    // Container may have been hidden (0px) when first drawn, which makes the
+    // initial fit wrong — recompute size then re-fit once it's visible.
+    setTimeout(() => { tripMap.invalidateSize(); fit(); }, 0);
   }
 
   // Summary stats across all tracks
