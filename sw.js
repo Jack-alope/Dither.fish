@@ -1,5 +1,5 @@
-const CACHE     = 'dither-v24';
-const API_CACHE = 'dither-api-v24';
+const CACHE     = 'dither-v25';
+const API_CACHE = 'dither-api-v25';
 
 const STATIC = [
   '/',
